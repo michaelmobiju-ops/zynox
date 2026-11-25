@@ -29,7 +29,7 @@ export async function cart(interaction,env){
    db.prepare("INSERT OR IGNORE INTO order_stock(order_id,stock_id) SELECT o.id,s.id FROM orders o JOIN stock s ON s.variant_id=o.variant_id WHERE o.id=? AND o.status='pending' AND s.status='available' AND NOT EXISTS(SELECT 1 FROM order_stock WHERE order_id=o.id) ORDER BY s.created_at,s.id LIMIT 1").bind(orderId),
    db.prepare("UPDATE stock SET status='reserved',reserved_until=datetime('now','+10 minutes') WHERE id IN (SELECT os.stock_id FROM order_stock os JOIN orders o ON o.id=os.order_id JOIN variants v ON v.id=o.variant_id WHERE o.id=? AND o.status='pending' AND v.infinite_stock=0) AND status='available'").bind(orderId)
   ]);
-  const order=await db.prepare("SELECT o.id,o.total_cents FROM orders o JOIN order_stock os ON os.order_id=o.id WHERE o.id=? AND o.customer_id=? AND o.status='pending'").bind(orderId,customer.id).first();
+  const order=await db.prepare("SELECT o.id,o.total_cents FROM orders o JOIN order_stock os ON os.order_id=o.id JOIN stock st ON st.id=os.stock_id AND st.status='reserved' AND st.reserved_until>datetime('now') WHERE o.id=? AND o.customer_id=? AND o.status='pending'").bind(orderId,customer.id).first();
   if(!order)return reply("Estoque indisponível ou pedido expirado.");
   return reply("Reserva criada por 10 minutos.\n"+p.name+" — "+v.name+"\nTotal: R$ "+(v.price_cents/100).toFixed(2)+"\nPedido: "+orderId+"\nPix ainda não configurado.");
  }
