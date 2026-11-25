@@ -120,7 +120,7 @@ export async function discordCallback(request, env) {
     )
     VALUES (?, ?, ?, 'subscriber', 'active')
     ON CONFLICT(discord_id)
-    DO UPDATE SET username = excluded.username
+    DO UPDATE SET username = excluded.username WHERE users.role = 'subscriber'
   `).bind(
     crypto.randomUUID(),
     profile.id,
@@ -133,7 +133,7 @@ export async function discordCallback(request, env) {
     WHERE discord_id = ?
   `).bind(profile.id).first();
 
-  if (!user || user.status !== "active") {
+  if (!user || user.role !== "subscriber" || user.status !== "active") {
     return new Response(
       "Acesso suspenso ou indisponível.",
       { status: 403 }
