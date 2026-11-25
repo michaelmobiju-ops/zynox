@@ -294,6 +294,37 @@ export default {
         return json({success:true,registered});
       }
 
+      // List installed guilds only for users with verified management rights.
+      if (path === "/api/discord/servers") {
+        if (request.method !== "GET") return json({error:"Método não permitido."},405);
+        const user = await getSession(request,env);
+        if (!user) return json({error:"Autenticação necessária."},401);
+        if (!isAdmin(user) && !await getSubscription(env,user.id)) return json({error:"Assinatura necessária."},403);
+        if (!user.discord_id) return json({servers:[],needsDiscord:true});
+        if (!env.DISCORD_BOT_TOKEN) return json({error:"Bot indisponível."},503);
+        const headers = {Authorization:"Bot "+env.DISCORD_BOT_TOKEN};
+        const call = async path => fetch("https://discord.com/api/v10"+path,{headers,signal:AbortSignal.timeout(8000)});
+        const response = await call("/users/@me/guilds?limit=200");
+        if (!response.ok) return json({error:"Não foi possível consultar servidores."},502);
+        const guilds = await response.json();
+        const servers = [];
+        for (const guild of guilds.slice(0,20)) {
+          const memberResponse = await call("/guilds/"+guild.id+"/members/"+user.discord_id);
+          if (!memberResponse.ok) continue;
+          const member = await memberResponse.json();
+          const detailResponse = await call("/guilds/"+guild.id);
+          if (!detailResponse.ok) continue;
+          const detail = await detailResponse.json();
+          const roles = new Set([guild.id,...member.roles]);
+          const permissions = detail.roles.reduce((p,role)=>roles.has(role.id)?p|BigInt(role.permissions):p,0n);
+          if (detail.owner_id !== user.discord_id && !(permissions & 40n)) continue;
+          const store = await env.DB.prepare("SELECT owner_id FROM stores WHERE guild_id=?").bind(guild.id).first();
+          if (store && store.owner_id !== user.id) continue;
+          servers.push({id:guild.id,name:guild.name,linked:!!store});
+        }
+        return json({servers,limited:guilds.length>20});
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
