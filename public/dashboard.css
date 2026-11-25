@@ -381,3 +381,18 @@ body.server-selection-mode .topbar{border-bottom:1px solid #2e2440}
 @media(max-width:520px){body.server-selection-mode .topbar{padding:14px 16px}.server-entry-head{margin-bottom:24px}.server-card{padding:17px}.server-entry-actions .control-button{font-size:12px}.server-entry-footer .control-button{font-size:12px}}
 
 .server-avatar{position:relative;overflow:hidden;flex-shrink:0}.server-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+.account-hero{border:1px solid #49306b;border-radius:17px;overflow:hidden;background:#171121;margin:18px 0}
+.account-banner{height:130px;background:linear-gradient(115deg,#402078,#7135ff 55%,#26123e);position:relative;overflow:hidden}
+.account-banner img{width:100%;height:100%;object-fit:cover}
+.account-identity{display:flex;align-items:center;gap:16px;padding:0 18px 17px;margin-top:-30px;position:relative}
+.account-avatar{height:74px;width:74px;border:4px solid #171121;border-radius:22px;background:#7135ff;display:grid;place-items:center;font-weight:800;font-size:24px;overflow:hidden;flex-shrink:0}
+.account-avatar img{height:100%;width:100%;object-fit:cover}
+.account-name h2{margin:28px 0 2px;font-size:21px;overflow-wrap:anywhere}.account-name p{margin:0;color:#A19BAD}
+.account-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;margin:16px 0}
+.account-detail{border:1px solid #392b50;border-radius:12px;padding:12px;background:#1a1426;display:grid;gap:5px;overflow-wrap:anywhere}
+.account-detail span{font-size:12px;color:#aaa2b9}.account-detail strong{font-size:14px}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:14px;margin:16px 0}
+.plan-card{border:1px solid #49306b;border-radius:16px;padding:17px;background:#1b1428}
+.plan-card h3{font-size:22px;color:#d5b2ff;margin:0 0 14px}.plan-card p{font-size:13px}
+.plan-duration{margin-top:10px}.plan-duration p{border-bottom:1px solid #49306b;padding:7px 0}
