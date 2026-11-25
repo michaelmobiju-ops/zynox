@@ -318,3 +318,14 @@ textarea.control-input {
     transition: none;
   }
 }
+
+/* Dashboard: seven-day confirmed sales */
+#dashboard-store{margin:12px 0;}
+#dashboard-status{margin-top:12px;color:#A19BAD;font-size:13px;}
+#sales-chart.chart{display:grid;align-content:start;gap:14px;height:auto;min-height:180px;padding:18px 0;}
+.home-chart-row{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(86px,auto);align-items:center;gap:10px;color:#DAD5E5;font-size:12px;font-variant-numeric:tabular-nums;}
+.home-chart-row>span:last-child{text-align:right;}
+.home-chart-track{height:15px;background:#201A30;border-radius:6px;overflow:hidden;}
+.home-chart-bar{height:100%;background:linear-gradient(90deg,#7135FF,#C084FC);border-radius:6px;}
+.metric strong,.control-stat h2{overflow-wrap:anywhere;}
+@media(max-width:600px){.home-chart-row{grid-template-columns:36px minmax(0,1fr) minmax(75px,auto);gap:6px;font-size:11px;}.metric strong{font-size:clamp(16px,4.6vw,25px);}.control-stat h2{font-size:clamp(17px,4.6vw,28px);}}
