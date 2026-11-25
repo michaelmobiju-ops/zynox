@@ -74,6 +74,28 @@ export async function commerce(request,env,storeChannels){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,c.username FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   return json({orders,customers:await list("SELECT discord_id,username,created_at FROM customers WHERE store_id=? LIMIT 100",store.id),coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:await list("SELECT type,amount_cents,status,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id),gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? LIMIT 100",store.id)});
  }
+ if(path==="/api/commerce/gateways"&&request.method==="POST"){
+  const provider=String(body.provider||""),token=String(body.api_token||"").trim();
+  const endpoints={mercadopago:{url:"https://api.mercadopago.com/users/me",prefix:"Bearer "},asaas:{url:"https://api.asaas.com/v3/myAccount",prefix:""},asaas_sandbox:{url:"https://api-sandbox.asaas.com/v3/myAccount",prefix:""}};
+  if(!endpoints[provider]||token.length<20||token.length>4000)return fail("Provedor ou token inválido.");
+  if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Configure GATEWAY_ENCRYPTION_KEY nos secrets da Cloudflare.",503);
+  const test=await fetch(endpoints[provider].url,{headers:{Authorization:endpoints[provider].prefix+token,Accept:"application/json"},signal:AbortSignal.timeout(10000)});
+  if(!test.ok)return fail("O provedor recusou a credencial. Confira a chave e o ambiente.",422);
+  const raw=await test.json();
+  const iv=crypto.getRandomValues(new Uint8Array(12)),key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["encrypt"]);
+  const cipher=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(token));
+  const hex=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+  const encrypted=hex(iv)+":"+hex(cipher),existing=await env.DB.prepare("SELECT id FROM gateways WHERE store_id=? AND provider=?").bind(store.id,provider).first(),id=existing?.id||crypto.randomUUID();
+  await env.DB.prepare("UPDATE gateways SET is_primary=0 WHERE store_id=?").bind(store.id).run();
+  await env.DB.prepare("INSERT INTO gateways(id,store_id,provider,credentials_encrypted,is_primary,status) VALUES(?,?,?,?,1,'connected') ON CONFLICT(id) DO UPDATE SET credentials_encrypted=excluded.credentials_encrypted,is_primary=1,status='connected'").bind(id,store.id,provider,encrypted).run();
+  return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
+ }
+ if(path==="/api/commerce/wallet"&&request.method==="GET"){
+  const rows=await list("SELECT id,type,amount_cents,status,description,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id);
+  const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS balance FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
+  const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
+  return json({balance_cents:balance.balance,pending_withdrawal_cents:pending.amount,transactions:rows});
+ }
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount);
   if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100)return fail("Cupom inválido.");
