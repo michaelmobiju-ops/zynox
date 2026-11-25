@@ -51,13 +51,6 @@ export async function paymentWebhook(request,env){
   if(digest!==parts.v1)return json({error:"Unauthorized"},401);
   provider="mercadopago";paymentId=String(event.data.id);
  }
- if(provider==="asaas"&&event.transfer?.id){
-  const transfer=event.transfer;
-  const status=transfer.status==="DONE"?"completed":(["FAILED","CANCELLED"].includes(transfer.status)?"failed":"pending");
-  const description="Saque Pix Asaas — "+String(transfer.status||"PENDING")+(transfer.failReason?" — "+String(transfer.failReason).slice(0,180):"");
-  await env.DB.prepare("UPDATE wallet_transactions SET status=?,description=? WHERE type='withdrawal' AND (external_reference=? OR external_reference=?)").bind(status,description,"asaas_transfer:"+transfer.id,"withdrawal_request:"+String(transfer.externalReference||"").replace(/^zynox_withdrawal_/,"")).run();
-  return json({received:true});
- }
  if(!paymentId)return json({received:true});
  const row=await env.DB.prepare("SELECT pay.*,g.provider,g.credentials_encrypted,o.id order_id,o.total_cents,o.store_id FROM payments pay JOIN gateways g ON g.id=pay.gateway_id JOIN orders o ON o.id=pay.order_id WHERE pay.external_id=? AND (g.provider=? OR (?='asaas' AND g.provider='asaas_sandbox'))").bind(String(paymentId),provider,provider).first();
  if(!row)return json({received:true});
