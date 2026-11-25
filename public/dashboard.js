@@ -185,6 +185,8 @@ function select(options) {
   const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",()=>{if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
   Object.defineProperty(root,"value",{get:()=>selected,set:v=>{selected=String(v);refresh();}});
   Object.defineProperty(root,"disabled",{get:()=>disabled,set:v=>{disabled=Boolean(v);display.disabled=disabled;close();}});
+  Object.defineProperty(root,"options",{get:()=>values});
+  root.replaceChildren=(...items)=>{values.length=0;selected="";for(const o of items){if(o instanceof HTMLOptionElement)root.addOption(o.value,o.textContent,o.disabled);}refresh();};
   root.addOption=(value,label,disabledOption=false)=>{values.push({value:String(value),label:String(label),disabled:Boolean(disabledOption)});if(values.length===1)selected=String(value);refresh();};
   root.append=(...nodes)=>{for(const o of nodes){if(o instanceof HTMLOptionElement)root.addOption(o.value,o.textContent,o.disabled);else HTMLElement.prototype.append.call(root,o);}};
   for(const [value,label] of options)root.addOption(value,label);
