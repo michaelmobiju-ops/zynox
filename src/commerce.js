@@ -149,6 +149,7 @@ export async function commerce(request,env,storeChannels){
   const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
   const hex=h=>Uint8Array.from(String(h).match(/../g)||[],x=>parseInt(x,16));
   let token;try{const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["decrypt"]);token=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:hex(ivHex)},key,hex(cipherHex)));}catch{return fail("Credencial Asaas inválida.",500);}
+  const base="https://api-sandbox.asaas.com/v3",headers={"access_token":token,"Content-Type":"application/json"};
   const id=crypto.randomUUID(),externalReference="zynox_withdrawal_"+id;
   const reserve=await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) SELECT ?,?,'withdrawal',?,?,'pending','Saque Pix reservado — aguardando confirmação do Asaas' WHERE ? <= (SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status IN ('completed','pending') THEN -amount_cents ELSE 0 END),0) FROM wallet_transactions WHERE store_id=?)").bind(id,store.id,amount,"withdrawal_request:"+id,amount,store.id).run();
   if(!reserve.meta.changes)return fail("Saldo disponível insuficiente ou já reservado por outro saque.",409);
