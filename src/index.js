@@ -9,6 +9,7 @@ import { handleLicenses } from "./licenses.js";
 import { adminLogin } from "./admin-auth.js";
 import { handleControl } from "./control.js";
 import { setupOwner } from "./owner.js";
+import { handleDiscordLink } from "./discord-link.js";
 
 const privateHeaders = {
   "Cache-Control": "no-store",
@@ -87,6 +88,10 @@ export default {
     const path = url.pathname;
 
     try {
+
+      if (path === "/auth/discord/link" || path === "/auth/discord/link/callback") {
+        return await handleDiscordLink(request, env);
+      }
 
       // Discord HTTP interactions: authenticate the exact raw request.
       if (path === "/discord/interactions") {
