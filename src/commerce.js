@@ -23,9 +23,18 @@ export async function commerce(request,env,storeChannels){
   await env.DB.batch([env.DB.prepare("INSERT INTO products(id,store_id,name,description,image_url,color,button_text,has_variations,channel_id,status) VALUES(?,?,?,?,?,?,?,?,?,'draft')").bind(id,store.id,name,description,image,color,button,body.has_variations?1:0,channel),...variants.map(v=>env.DB.prepare("INSERT INTO variants(id,product_id,name,price_cents) VALUES(?,?,?,?)").bind(crypto.randomUUID(),id,v.name.trim(),v.price_cents))]);
   return json({success:true,id},201);
  }
- if(path==="/api/commerce/stock"&&request.method==="POST"){
+ if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
+  if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
   const v=await env.DB.prepare("SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
   if(!v)return fail("Variação não encontrada.",404);
+  const result=await env.DB.prepare("UPDATE variants SET infinite_stock=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE variant_id=? AND status IN ('pending','paid')) AND (?=0 OR ((SELECT count(*) FROM stock WHERE variant_id=? AND status='available')=1 AND NOT EXISTS(SELECT 1 FROM stock WHERE variant_id=? AND status='reserved')))").bind(body.infinite?1:0,v.id,v.id,body.infinite?1:0,v.id,v.id).run();
+  if(!result.meta.changes)return fail("Estoque infinito exige exatamente uma key disponível e nenhum pedido pendente.",409);
+  return json({success:true});
+ }
+ if(path==="/api/commerce/stock"&&request.method==="POST"){
+  const v=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
+  if(!v)return fail("Variação não encontrada.",404);
+  if(v.infinite_stock)return fail("Desative o estoque infinito antes de adicionar keys.",409);
   if(!env.STOCK_ENCRYPTION_KEY||env.STOCK_ENCRYPTION_KEY.length<32)return fail("Configure STOCK_ENCRYPTION_KEY na Cloudflare.",503);
   if(typeof body.keys!=="string"||body.keys.length>50000)return fail("Estoque inválido.");
   const keys=[...new Set(body.keys.split(/\r?\n/).map(x=>x.trim()).filter(Boolean))];
@@ -40,7 +49,7 @@ export async function commerce(request,env,storeChannels){
    const iv=crypto.getRandomValues(new Uint8Array(12));
    const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:enc.encode(v.id)},key,enc.encode(value));
    const fingerprint=hex(await crypto.subtle.sign("HMAC",mac,enc.encode(v.id+"\0"+value)));
-   statements.push(env.DB.prepare("INSERT INTO stock(id,variant_id,key_encrypted,key_fingerprint) VALUES(?,?,?,?) ON CONFLICT(variant_id,key_fingerprint) DO NOTHING").bind(crypto.randomUUID(),v.id,hex(iv)+":"+hex(encrypted),fingerprint));
+   statements.push(env.DB.prepare("INSERT INTO stock(id,variant_id,key_encrypted,key_fingerprint) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM variants WHERE id=? AND infinite_stock=0) ON CONFLICT(variant_id,key_fingerprint) DO NOTHING").bind(crypto.randomUUID(),v.id,hex(iv)+":"+hex(encrypted),fingerprint,v.id));
   }
   const results=await env.DB.batch(statements);
   return json({success:true,added:results.reduce((n,x)=>n+x.meta.changes,0)});
