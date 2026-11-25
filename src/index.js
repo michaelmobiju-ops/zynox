@@ -355,6 +355,40 @@ export default {
         return json({success:true,store:{id:store.id,name:store.name}});
       }
 
+      if (path === "/api/store/channels") {
+        if (request.method !== "GET") return json({error:"Método não permitido."},405);
+        const user = await getSession(request,env);
+        if (!user || !user.discord_id || (!isAdmin(user) && !await getSubscription(env,user.id))) return json({error:"Acesso restrito."},403);
+        const stores = (await env.DB.prepare("SELECT id,name,guild_id FROM stores WHERE owner_id=?").bind(user.id).all()).results;
+        const id = url.searchParams.get("store");
+        if (!id) return json({stores});
+        const store = stores.find(s=>s.id===id);
+        if (!store) return json({error:"Loja não encontrada."},404);
+        const guild = store.guild_id;
+        const call = p => fetch("https://discord.com/api/v10"+p,{headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(8000)});
+        const [gr,mr,br,cr] = await Promise.all([call("/guilds/"+guild),call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild+"/members/"+env.DISCORD_CLIENT_ID),call("/guilds/"+guild+"/channels")]);
+        if (![gr,mr,br,cr].every(r=>r.ok)) return json({error:"Servidor indisponível ou acesso removido."},403);
+        const [g,m,b,channels] = await Promise.all([gr.json(),mr.json(),br.json(),cr.json()]);
+        const base = member => g.roles.reduce((p,r)=>r.id===guild||member.roles.includes(r.id)?p|BigInt(r.permissions):p,0n);
+        if (g.owner_id!==user.discord_id && !(base(m)&40n)) return json({error:"Sem permissão de gerenciamento."},403);
+        function effective(member,id,ch) {
+          let p=base(member);
+          if (p&8n || g.owner_id===id) return -1n;
+          const o=ch.permission_overwrites||[];
+          const apply=(allow,deny)=>{p=(p&~deny)|allow;};
+          const everyone=o.find(x=>x.id===guild);
+          if(everyone) apply(BigInt(everyone.allow),BigInt(everyone.deny));
+          let allow=0n,deny=0n;
+          for(const x of o) if(x.type===0&&x.id!==guild&&member.roles.includes(x.id)){allow|=BigInt(x.allow);deny|=BigInt(x.deny);}
+          apply(allow,deny);
+          const own=o.find(x=>x.type===1&&x.id===id);
+          if(own) apply(BigInt(own.allow),BigInt(own.deny));
+          return p;
+        }
+        const required=19456n;
+        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,env.DISCORD_CLIENT_ID,c)&required)===required}))});
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
