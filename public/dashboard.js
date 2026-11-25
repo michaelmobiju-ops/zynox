@@ -1198,10 +1198,10 @@ function navigate(page) {
         const top=node("div",undefined,"server-card-top");top.append(icon,badge);
         card.append(top,node("h2",server.name),node("p","Servidor conectado ao Discord"),node("p",server.enabled_since?"Ativo desde "+formatDate(server.enabled_since):"Adicionado em "+formatDate(server.created_at),"server-date"));
         const controls=node("div",undefined,"server-card-actions");
-        controls.append(button("Gerenciar servidor",()=>{ZYNOX.store=server;updateProfile();navigate("home");}));
+        controls.append(button("Gerenciar servidor",()=>{ZYNOX.store=server;try{sessionStorage.setItem("zynox:store:"+ZYNOX.user.id,JSON.stringify({id:server.id,name:server.name,guild_id:server.guild_id}));}catch{}updateProfile();navigate("home");}));
         if(data.controls_ready){
           controls.append(button(server.enabled?"Pausar":"Reativar",async()=>{await api("/api/server-controls/action",{store_id:server.id,action:server.enabled?"pause":"resume"});await load();}));
-          controls.append(button("Remover",async()=>{if(!confirm("Remover o bot do servidor? Os registros serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id)ZYNOX.store=null;await load();},true));
+          controls.append(button("Remover",async()=>{if(!confirm("Remover o bot do servidor? Os registros serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id){ZYNOX.store=null;try{sessionStorage.removeItem("zynox:store:"+ZYNOX.user.id);}catch{}}await load();},true));
         }
         card.append(controls);list.append(card);
       }
@@ -1326,6 +1326,7 @@ async function initialize() {
     ZYNOX.user = data.user;
     ZYNOX.subscription = data.subscription;
     ZYNOX.discordProfile = data.discord_profile;
+    try{const saved=JSON.parse(sessionStorage.getItem("zynox:store:"+ZYNOX.user.id)||"null");if(saved&&typeof saved.id==="string")ZYNOX.store=saved;}catch{}
 
     if (!isAdmin() && !ZYNOX.subscription) {
       window.location.replace("/plans");
