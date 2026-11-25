@@ -520,6 +520,23 @@ export async function handleControl(request, env) {
     return json({ success: true });
   }
 
+  // EXCLUIR CADASTRO DE ADMINISTRADOR (somente dono)
+  if(path==="/api/control/admins/delete"&&method==="POST"){
+    const id=String(body.id||"");
+    const target=await env.DB.prepare("SELECT id,username FROM users WHERE id=? AND role='admin'").bind(id).first();
+    if(!target)return json({error:"Administrador não encontrado."},404);
+    const linked=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM stores WHERE owner_id=?) AS stores,(SELECT COUNT(*) FROM licenses WHERE created_by=? OR redeemed_by=?) AS licenses,(SELECT COUNT(*) FROM subscriptions WHERE user_id=?) AS subscriptions").bind(id,id,id,id).first();
+    if(linked.stores||linked.licenses||linked.subscriptions)return json({error:"Este administrador possui dados vinculados. Suspenda a conta e transfira/remova os registros antes de excluir."},409);
+    const result=await env.DB.batch([
+      env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+      env.DB.prepare("UPDATE audit_logs SET user_id=NULL WHERE user_id=?").bind(id),
+      env.DB.prepare("DELETE FROM users WHERE id=? AND role='admin'").bind(id),
+      env.DB.prepare("INSERT INTO audit_logs(id,user_id,action,details) VALUES(?,?,?,?)").bind(crypto.randomUUID(),user.id,"ADMIN_DELETED",JSON.stringify({id,username:target.username}))
+    ]);
+    if(!result[2].meta.changes)return json({error:"Administrador não encontrado."},404);
+    return json({success:true});
+  }
+
   // HISTÓRICO ADMINISTRATIVO
 
   if (
