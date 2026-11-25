@@ -134,6 +134,33 @@ export async function commerce(request,env,storeChannels){
   await env.DB.prepare("INSERT INTO gateways(id,store_id,provider,credentials_encrypted,is_primary,status) VALUES(?,?,?,?,1,'connected') ON CONFLICT(id) DO UPDATE SET credentials_encrypted=excluded.credentials_encrypted,is_primary=1,status='connected'").bind(id,store.id,provider,encrypted).run();
   return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
  }
+ if(path==="/api/commerce/wallet/withdrawals/transfer"&&request.method==="POST"){
+  const amount=Number(body.amount_cents),pixKey=String(body.pix_key||"").trim(),keyType=String(body.pix_key_type||"");
+  const types=["CPF","CNPJ","EMAIL","PHONE","EVP"];
+  if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Valor de saque inválido.");
+  if(!types.includes(keyType)||!pixKey||pixKey.length>200)return fail("Informe uma chave Pix e o tipo válido.");
+  if((keyType==="CPF"&&!/^\d{11}$/.test(pixKey))||(keyType==="CNPJ"&&!/^\d{14}$/.test(pixKey))||(keyType==="PHONE"&&!/^\d{11}$/.test(pixKey))||(keyType==="EMAIL"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pixKey)))return fail("Formato da chave Pix inválido.");
+  const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected' AND provider IN ('asaas','asaas_sandbox')").bind(store.id).first();
+  if(!gateway)return fail("Conecte Asaas ou Asaas Sandbox antes de solicitar Pix.",409);
+  if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Chave de criptografia não configurada.",503);
+  const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
+  const hex=h=>Uint8Array.from(String(h).match(/../g)||[],x=>parseInt(x,16));
+  let token;try{const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["decrypt"]);token=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:hex(ivHex)},key,hex(cipherHex)));}catch{return fail("Credencial Asaas inválida.",500);}
+  const ledger=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status IN ('completed','pending') THEN -amount_cents ELSE 0 END),0) AS amount FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
+  if(ledger.amount<amount)return fail("Saldo disponível na carteira insuficiente.",409);
+  const base=gateway.provider==="asaas_sandbox"?"https://api-sandbox.asaas.com/v3":"https://api.asaas.com/v3",headers={"access_token":token,"Content-Type":"application/json"};
+  const balanceRes=await fetch(base+"/finance/balance",{headers,signal:AbortSignal.timeout(10000)});
+  if(!balanceRes.ok)return fail("Não foi possível consultar o saldo Asaas.",502);
+  const bankBalance=await balanceRes.json();
+  if(Math.round(Number(bankBalance.balance||0)*100)<amount)return fail("Saldo disponível na conta Asaas insuficiente.",409);
+  const id=crypto.randomUUID(),externalReference="zynox_withdrawal_"+id;
+  const transferRes=await fetch(base+"/transfers",{method:"POST",headers,body:JSON.stringify({value:amount/100,pixAddressKey:pixKey,pixAddressKeyType:keyType,operationType:"PIX",description:"Saque carteira ZYNOX",externalReference}),signal:AbortSignal.timeout(15000)});
+  if(!transferRes.ok)return fail("Asaas recusou a transferência. Nenhum saque foi registrado como concluído.",502);
+  const transfer=await transferRes.json();
+  if(!transfer.id)return fail("Asaas não retornou o identificador da transferência.",502);
+  await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) VALUES(?,?,'withdrawal',?,?,?,?)").bind(id,store.id,amount,"asaas_transfer:"+transfer.id,["DONE","CONFIRMED"].includes(transfer.status)?"completed":"pending","Saque Pix Asaas — "+String(transfer.status||"PENDING")).run();
+  return json({success:true,withdrawal:{id,provider_transfer_id:transfer.id,amount_cents:amount,status:transfer.status||"PENDING"}},201);
+ }
  if(path==="/api/commerce/wallet/withdrawals"&&request.method==="POST"){
   const amount=Number(body.amount_cents);
   if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Informe um saque entre R$ 10,00 e R$ 1.000.000,00.");
