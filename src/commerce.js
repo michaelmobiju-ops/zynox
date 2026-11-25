@@ -76,10 +76,10 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/gateways"&&request.method==="POST"){
   const provider=String(body.provider||""),token=String(body.api_token||"").trim();
-  const endpoints={mercadopago:{url:"https://api.mercadopago.com/users/me",prefix:"Bearer "},asaas:{url:"https://api.asaas.com/v3/myAccount",prefix:""},asaas_sandbox:{url:"https://api-sandbox.asaas.com/v3/myAccount",prefix:""}};
+  const endpoints={mercadopago:{url:"https://api.mercadopago.com/users/me",headers:t=>({Authorization:"Bearer "+t})},asaas:{url:"https://api.asaas.com/v3/myAccount",headers:t=>({access_token:t})},asaas_sandbox:{url:"https://api-sandbox.asaas.com/v3/myAccount",headers:t=>({access_token:t})}};
   if(!endpoints[provider]||token.length<20||token.length>4000)return fail("Provedor ou token inválido.");
   if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Configure GATEWAY_ENCRYPTION_KEY nos secrets da Cloudflare.",503);
-  const test=await fetch(endpoints[provider].url,{headers:{Authorization:endpoints[provider].prefix+token,Accept:"application/json"},signal:AbortSignal.timeout(10000)});
+  const test=await fetch(endpoints[provider].url,{headers:{...endpoints[provider].headers(token),Accept:"application/json"},signal:AbortSignal.timeout(10000)});
   if(!test.ok)return fail("O provedor recusou a credencial. Confira a chave e o ambiente.",422);
   const raw=await test.json();
   const iv=crypto.getRandomValues(new Uint8Array(12)),key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["encrypt"]);
