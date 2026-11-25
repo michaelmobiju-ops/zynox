@@ -905,7 +905,10 @@ function navigate(page) {
       if(page==="wallet"){
         const d=await api("/api/commerce/wallet?store="+encodeURIComponent(id));
         const money=n=>"R$ "+(Number(n||0)/100).toFixed(2).replace(".",",");
-        content.append(node("div","Saldo disponível: "+money(d.balance_cents),"control-stat"),node("p","Saques pendentes: "+money(d.pending_withdrawal_cents)),node("h3","Extrato"));
+        content.append(node("h3","ZYNOX WALLET"));
+        content.append(node("p",d.enabled?"Carteira ativada para esta loja. Os créditos exibidos são um registro financeiro interno; não representam depósito bancário nem dinheiro custodiado pela ZYNOX.":"Carteira desativada. As vendas continuam sendo processadas pelo provedor conectado, mas não entram no extrato da ZYNOX Wallet."));
+        content.append(button(d.enabled?"Desativar carteira":"Ativar carteira",async()=>{await api("/api/commerce/wallet/settings",{store_id:id,enabled:!d.enabled});await load();}));
+        content.append(node("div","Saldo registrado: "+money(d.balance_cents),"control-stat"),node("p","Saques pendentes: "+money(d.pending_withdrawal_cents)),node("h3","Extrato"));
         const amount=input("Valor do saque em reais","number"),pixType=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone"],["EVP","Chave aleatória"]]),pixKey=input("Chave Pix de destino");
         content.append(node("h3","Saque automático via Asaas"),field("Valor (R$)",amount),field("Tipo da chave Pix",pixType),field("Chave Pix",pixKey),button("Enviar saque via Pix",async()=>{if(!confirm("Confirma enviar R$ "+Number(amount.value).toFixed(2)+" para a chave Pix informada? Esta transferência pode ser irreversível."))return;const cents=Math.round(Number(amount.value)*100);const result=await api("/api/commerce/wallet/withdrawals/transfer",{store_id:id,amount_cents:cents,pix_key_type:pixType.value,pix_key:pixKey.value});status.textContent="Transferência criada: "+result.withdrawal.status+" • ID "+result.withdrawal.provider_transfer_id;amount.value="";pixKey.value="";await load();}),node("p","Disponível somente com Asaas conectado e saldo suficiente na carteira ZYNOX e na conta Asaas."));
         if(!d.transactions.length)content.append(node("p","Nenhuma movimentação registrada."));
