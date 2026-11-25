@@ -1,3 +1,4 @@
+import {deliver} from "./payment-webhook.js";
 import {getSession} from "./auth.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
 const fail=(error,status=400)=>json({error},status);
@@ -119,13 +120,24 @@ export async function commerce(request,env,storeChannels){
    env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
   ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
   if(!result[0].meta.changes)return fail("Pedido já processado.",409);
-  return json({success:true,status:"paid",delivery:"pending"});
+  let delivery="pending";try{delivery=await deliver(env,id);}catch{}
+  return json({success:true,status:delivery==="delivered"?"delivered":"paid",delivery});
+ }
+ if(path==="/api/commerce/manual-pix/retry-delivery"&&request.method==="POST"){
+  const id=String(body.order_id||"");
+  const row=await env.DB.prepare("SELECT o.status FROM orders o JOIN manual_pix_orders m ON m.order_id=o.id WHERE o.id=? AND o.store_id=? AND m.status='confirmed'").bind(id,store.id).first();
+  if(!row)return fail("Pedido confirmado não encontrado.",404);
+  if(row.status==="delivering")return fail("Entrega em análise. Confira a mensagem enviada antes de qualquer reenvio.",409);
+  if(row.status!=="paid"&&row.status!=="delivered")return fail("Pedido indisponível.",409);
+  let delivery="pending";try{delivery=await deliver(env,id);}catch{}
+  return json({success:true,delivery});
  }
  if(path==="/api/commerce/pix"&&request.method==="POST"){
   if(env.ENABLE_SANDBOX_PAYMENTS!=="true")return fail("Cobranças desativadas até a homologação.",503);
   const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,v.infinite_stock,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
   if(!order)return fail("Pedido pendente não encontrado.",404);
-  if(order.infinite_stock)return fail("Entrega automática de estoque infinito ainda não está disponível.",409);
+  if(await env.DB.prepare("SELECT order_id FROM manual_pix_orders WHERE order_id=?").bind(order.id).first())return fail("Este pedido utiliza Pix manual.",409);
+  if(order.infinite_stock)return fail("Cobrança automática para estoque infinito ainda não homologada.",409);
   const reserved=await env.DB.prepare("SELECT s.id FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.status='reserved'").bind(order.id).first();
   if(!reserved)return fail("Reserva de estoque expirou. Crie um novo pedido.",409);
   const buyerName=String(body.buyer_name||"").trim(),email=String(body.buyer_email||"").trim().toLowerCase();
