@@ -151,6 +151,10 @@ export default {
         try { interaction = JSON.parse(raw); } catch { return json({error:"JSON inválido."},400); }
         if (interaction.type === 1) return json({type:1});
         if (interaction.application_id !== env.DISCORD_CLIENT_ID) return new Response("Unauthorized",{status:401});
+        if(interaction.guild_id){
+          const paused=await env.DB.prepare("SELECT c.enabled FROM server_controls c JOIN stores s ON s.id=c.store_id WHERE s.guild_id=?").bind(interaction.guild_id).first();
+          if(paused&&paused.enabled===0)return json({type:4,data:{content:"ZYNOX está pausado neste servidor.",flags:64}});
+        }
         if (interaction.type === 3) { const result = await cart(interaction,env); if(result) return json(result); }
         const replies = {
           ping: "🏓 Pong! ZYNOX está respondendo.",
@@ -343,6 +347,36 @@ export default {
       }
 
       // List installed guilds only for users with verified management rights.
+      if(path==="/api/server-controls"||path==="/api/server-controls/action"){
+        const user=await getSession(request,env);
+        if(!user||!user.discord_id||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
+        if(path==="/api/server-controls"&&request.method==="GET"){
+          const stores=(await env.DB.prepare("SELECT s.id,s.name,s.guild_id,s.created_at,COALESCE(c.enabled,1) AS enabled,c.enabled_since,c.removed_at FROM stores s LEFT JOIN server_controls c ON c.store_id=s.id WHERE s.owner_id=? ORDER BY s.name").bind(user.id).all()).results;
+          return json({stores,bot_mode:"http",presence_supported:false});
+        }
+        if(path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+        let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
+        const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||""),user.id).first();
+        if(!store)return json({error:"Servidor não encontrado."},404);
+        if(!["pause","resume","leave"].includes(body.action))return json({error:"Ação inválida."},400);
+        const call=(p,method="GET")=>fetch("https://discord.com/api/v10"+p,{method,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(8000)});
+        const [gr,mr]=await Promise.all([call("/guilds/"+store.guild_id),call("/guilds/"+store.guild_id+"/members/"+user.discord_id)]);
+        if(!gr.ok||!mr.ok)return json({error:"Servidor indisponível."},403);
+        const g=await gr.json(),m=await mr.json();
+        const perms=g.roles.reduce((p,r)=>r.id===g.id||m.roles.includes(r.id)?p|BigInt(r.permissions):p,0n);
+        if(g.owner_id!==user.discord_id&&!(perms&40n))return json({error:"Sem permissão de gerenciamento."},403);
+        if(body.action==="leave"){
+          if(body.confirm!==true)return json({error:"Confirme a remoção."},400);
+          const res=await call("/users/@me/guilds/"+store.guild_id,"DELETE");
+          if(!res.ok)return json({error:"Discord recusou a remoção."},502);
+          await env.DB.prepare("INSERT INTO server_controls(store_id,enabled,removed_at) VALUES(?,0,datetime('now')) ON CONFLICT(store_id) DO UPDATE SET enabled=0,removed_at=datetime('now')").bind(store.id).run();
+          return json({success:true});
+        }
+        const enabled=body.action==="resume"?1:0;
+        await env.DB.prepare("INSERT INTO server_controls(store_id,enabled,enabled_since) VALUES(?,?,datetime('now')) ON CONFLICT(store_id) DO UPDATE SET enabled=excluded.enabled,enabled_since=CASE WHEN excluded.enabled=1 AND server_controls.enabled=0 THEN datetime('now') ELSE server_controls.enabled_since END,removed_at=NULL").bind(store.id,enabled).run();
+        return json({success:true,enabled:Boolean(enabled)});
+      }
+
       if (path === "/api/discord/servers") {
         if (request.method !== "GET") return json({error:"Método não permitido."},405);
         const user = await getSession(request,env);
