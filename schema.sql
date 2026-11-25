@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS stores (
   owner_id TEXT NOT NULL,
   name TEXT NOT NULL,
   guild_id TEXT NOT NULL UNIQUE,
+  wallet_enabled INTEGER NOT NULL DEFAULT 0 CHECK(wallet_enabled IN (0,1)),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(owner_id) REFERENCES users(id)
 );
