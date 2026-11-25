@@ -1015,7 +1015,7 @@ function navigate(page) {
     const nav=node("div",undefined,"control-navigation"),content=node("div");
     const options=[["pix","Pix manual"],["banks","Bancos"],["gateways","Gateways"]];
     const banks=[["nubank","Nubank"],["mercadopago","Mercado Pago"],["picpay","PicPay"],["itau","Itaú"],["inter","Banco Inter"],["bradesco","Bradesco"],["caixa","Caixa"],["bb","Banco do Brasil"],["santander","Santander"],["other","Outro banco"]];
-    let tab="pix",selectedBank="nubank";
+    let tab="pix",selectedBank="nubank",bankLoaded=false;
     const bankNames=Object.fromEntries(banks);
     function render(){
       content.replaceChildren();nav.replaceChildren();
@@ -1031,7 +1031,7 @@ function navigate(page) {
       api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
         if(tab!=="pix")return;
         const type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
-        if(m.settings){selectedBank=m.settings.bank;type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
+        if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;}type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
         status.textContent=m.settings?.enabled?"Pix manual ativo":"Pix manual desativado";
         content.append(field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar Pix manual",async()=>{
           await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,bank:selectedBank,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});toast("Pix manual salvo.",true);render();
