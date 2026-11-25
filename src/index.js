@@ -355,7 +355,7 @@ export default {
           try{
             stores=(await env.DB.prepare("SELECT s.id,s.name,s.guild_id,s.created_at,COALESCE(c.enabled,1) AS enabled,c.enabled_since,c.removed_at FROM stores s LEFT JOIN server_controls c ON c.store_id=s.id WHERE s.owner_id=? ORDER BY s.name").bind(user.id).all()).results;
           }catch(error){
-            if(!/no such table:\\s*server_controls/i.test(String(error)))throw error;
+            if(!String(error).includes("server_controls"))throw error;
             controls_ready=false;
             stores=(await env.DB.prepare("SELECT id,name,guild_id,created_at,1 AS enabled,NULL AS enabled_since,NULL AS removed_at FROM stores WHERE owner_id=? ORDER BY name").bind(user.id).all()).results;
           }
