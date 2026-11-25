@@ -176,17 +176,23 @@ function input(placeholder, type = "text") {
 }
 
 function select(options) {
-  const item = node("select");
-
-  item.className = "control-input";
-
-  options.forEach(([value, label]) => {
-    const option = node("option", label);
-    option.value = value;
-    item.appendChild(option);
-  });
-
-  return item;
+  const root=node("div",undefined,"zynox-select control-input");
+  root.tabIndex=0;root.setAttribute("role","combobox");root.setAttribute("aria-expanded","false");
+  const display=node("button",undefined,"zynox-select-current");display.type="button";
+  const choices=node("div",undefined,"zynox-select-menu");choices.hidden=true;
+  const values=[];let selected="",disabled=false;
+  const close=()=>{choices.hidden=true;root.setAttribute("aria-expanded","false");};
+  const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",()=>{if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
+  Object.defineProperty(root,"value",{get:()=>selected,set:v=>{selected=String(v);refresh();}});
+  Object.defineProperty(root,"disabled",{get:()=>disabled,set:v=>{disabled=Boolean(v);display.disabled=disabled;close();}});
+  root.addOption=(value,label,disabledOption=false)=>{values.push({value:String(value),label:String(label),disabled:Boolean(disabledOption)});if(values.length===1)selected=String(value);refresh();};
+  root.append=(...nodes)=>{for(const o of nodes){if(o instanceof HTMLOptionElement)root.addOption(o.value,o.textContent,o.disabled);else HTMLElement.prototype.append.call(root,o);}};
+  for(const [value,label] of options)root.addOption(value,label);
+  display.addEventListener("click",()=>{if(disabled)return;choices.hidden=!choices.hidden;root.setAttribute("aria-expanded",String(!choices.hidden));});
+  root.addEventListener("keydown",e=>{if(e.key==="Escape")close();if(e.key==="Enter"&&e.target===root){e.preventDefault();display.click();}});
+  document.addEventListener("click",e=>{if(!root.contains(e.target))close();});
+  HTMLElement.prototype.append.call(root,display,choices);
+  return root;
 }
 
 function field(label, item) {
@@ -266,23 +272,11 @@ function renderAccount(){
 }
 
 function renderPlans(){
- const box=panel("Atualizar plano","Escolha um plano para consultar detalhes, benefícios e períodos disponíveis.");
- const tiers=[
-  {key:"starter",title:"Starter",benefits:["Produtos e estoque","Vendas e relatórios","Pix manual"]},
-  {key:"pro",title:"Pro",benefits:["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"]},
-  {key:"premium",title:"Premium",benefits:["Tudo do Pro","Recursos premium conforme disponibilidade","Prioridade nas novidades"]}
- ];
- const grid=node("div",undefined,"plan-grid");
- for(const tier of tiers){
-  const card=node("div",undefined,"plan-card");
-  card.append(node("h3",tier.title));
-  for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
-  if(tier.key===ZYNOX.subscription?.plan?.toLowerCase())card.append(node("p","Plano atual"));
-  card.append(button("Ver períodos e valores",()=>{window.location.href="/plan-detail.html?plan="+tier.key;}));
-  grid.append(card);
- }
- box.append(grid,node("p","Preços provisórios. Compras ainda não habilitadas."));
- element("main-content").append(box);
+ const box=panel("Atualizar plano","Escolha o plano e o período.");
+ const tiers=[["starter","Starter",["Produtos e estoque","Vendas e relatórios","Pix manual"]],["pro","Pro",["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"]],["premium","Premium",["Tudo do Pro","Recursos premium conforme disponibilidade"]]];
+ const grid=node("div",undefined,"zynox-plan-grid");
+ for(const [id,title,benefits] of tiers){const card=node("div",undefined,"zynox-plan-choice");card.append(node("h3",title));for(const benefit of benefits)card.append(node("p","✓ "+benefit));card.append(button("Ver períodos e valores",()=>location.href="/plan-detail.html?plan="+id));grid.append(card);}
+ box.append(grid,node("p","Preços provisórios; pagamentos de assinatura indisponíveis."));element("main-content").append(box);
 }
 
 // ESTATÍSTICAS ADMINISTRATIVAS
