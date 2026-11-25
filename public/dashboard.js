@@ -28,32 +28,7 @@ const pageNames = {
   settings: "Configurações",
   support: "Suporte",
   account: "Minha conta",
-  control: "Zynox Control"
-};
-
-const descriptions = {
-  bot: "Configure seu bot de vendas.",
-  servers: "Gerencie seus servidores do Discord.",
-  products: "Crie e publique seus produtos.",
-  stock: "Gerencie chaves e estoque digital.",
-  sales: "Acompanhe suas vendas e pedidos.",
-  coupons: "Crie descontos e ofertas exclusivas.",
-  customers: "Gerencie seus clientes.",
-  automations: "Configure suas automações.",
-  tickets: "Gerencie seus atendimentos.",
-  payments: "Acompanhe seus pagamentos.",
-  gateways: "Configure suas integrações financeiras.",
-  wallet: "Gerencie seu saldo e movimentações.",
-  ai: "Seu assistente inteligente ZYNOX.",
-  reports: "Acompanhe o desempenho da sua loja.",
-  integrations: "Conecte serviços externos.",
-  plans: "Gerencie sua assinatura.",
-  licenses: "Consulte suas licenças.",
-  notifications: "Acompanhe suas notificações.",
-  settings: "Personalize sua operação.",
-  support: "Central de atendimento ZYNOX.",
-  account: "Gerencie sua conta.",
-  control: "Central administrativa ZYNOX."
+  control: "ZYNOX CONTROL"
 };
 
 let homeContent = "";
@@ -68,39 +43,159 @@ function isAdmin() {
   );
 }
 
+function isOwner() {
+  return ZYNOX.user?.role === "owner";
+}
+
+function node(tag, text, className) {
+  const item = document.createElement(tag);
+
+  if (text !== undefined) {
+    item.textContent = text;
+  }
+
+  if (className) {
+    item.className = className;
+  }
+
+  return item;
+}
+
 function openMenu() {
-  element("sidebar").hidden = false;
-  element("overlay").hidden = false;
+  element("sidebar")?.classList.add("open");
+  element("overlay")?.classList.add("active");
 
-  document.body.classList.add("menu-open");
-
-  element("open-menu").setAttribute(
-    "aria-expanded", "true"
-  );
-
-  element("close-menu").focus();
+  if (element("overlay")) {
+    element("overlay").hidden = false;
+  }
 }
 
 function closeMenu() {
-  element("sidebar").hidden = true;
-  element("overlay").hidden = true;
+  element("sidebar")?.classList.remove("open");
+  element("overlay")?.classList.remove("active");
 
-  document.body.classList.remove("menu-open");
-
-  element("open-menu").setAttribute(
-    "aria-expanded", "false"
-  );
+  if (element("overlay")) {
+    element("overlay").hidden = true;
+  }
 }
 
-function updateNavigation(page) {
-  document.querySelectorAll(
-    "#navigation [data-page]"
-  ).forEach(button => {
-    button.classList.toggle(
-      "active",
-      button.dataset.page === page
+async function api(path, body) {
+  const options = {
+    credentials: "same-origin",
+    cache: "no-store"
+  };
+
+  if (body !== undefined) {
+    options.method = "POST";
+    options.headers = {
+      "Content-Type": "application/json"
+    };
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(path, options);
+
+  if (response.status === 401) {
+    window.location.replace("/");
+    throw new Error("Sessão encerrada.");
+  }
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || "Não foi possível concluir."
     );
+  }
+
+  return data;
+}
+
+function panel(title, description) {
+  const box = node("section", undefined, "control-panel");
+
+  box.appendChild(node("h2", title));
+
+  if (description) {
+    box.appendChild(node("p", description));
+  }
+
+  return box;
+}
+
+function button(text, action, danger = false) {
+  const item = node(
+    "button",
+    text,
+    danger ? "control-danger" : "control-button"
+  );
+
+  item.type = "button";
+
+  item.addEventListener("click", async () => {
+    if (item.disabled) return;
+
+    item.disabled = true;
+
+    try {
+      await action();
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      item.disabled = false;
+    }
   });
+
+  return item;
+}
+
+function input(placeholder, type = "text") {
+  const item = node("input");
+
+  item.type = type;
+  item.placeholder = placeholder;
+  item.className = "control-input";
+
+  return item;
+}
+
+function select(options) {
+  const item = node("select");
+
+  item.className = "control-input";
+
+  options.forEach(([value, label]) => {
+    const option = node("option", label);
+    option.value = value;
+    item.appendChild(option);
+  });
+
+  return item;
+}
+
+function field(label, item) {
+  const wrapper = node("label", undefined, "control-field");
+
+  wrapper.appendChild(node("span", label));
+  wrapper.appendChild(item);
+
+  return wrapper;
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const normalized = String(value).includes("T")
+    ? value
+    : String(value).replace(" ", "T") + "Z";
+
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("pt-BR");
 }
 
 function updateProfile() {
@@ -108,199 +203,656 @@ function updateProfile() {
 
   if (!user) return;
 
-  element("username").textContent =
-    user.username;
+  const role = user.role === "owner"
+    ? "DONO"
+    : user.role === "admin"
+      ? "ADM"
+      : ZYNOX.subscription?.plan?.toUpperCase()
+        || "SEM PLANO";
 
-  const welcome = element("welcome-name");
-
-  if (welcome) {
-    welcome.textContent = user.username;
+  if (element("username")) {
+    element("username").textContent = user.username;
   }
 
-  let plan = ZYNOX.subscription?.plan ||
-    "Sem assinatura";
-
-  if (user.role === "owner") {
-    plan = "DONO";
+  if (element("user-plan")) {
+    element("user-plan").textContent = role;
   }
 
-  if (user.role === "admin") {
-    plan = "ADMINISTRADOR";
+  if (element("welcome-name")) {
+    element("welcome-name").textContent = user.username;
   }
 
-  element("user-plan").textContent = plan;
-
-  element("admin-navigation").hidden =
-    !isAdmin();
-}
-
-function createText(tag, className, text) {
-  const node = document.createElement(tag);
-
-  if (className) {
-    node.className = className;
+  if (element("admin-navigation")) {
+    element("admin-navigation").hidden = !isAdmin();
   }
-
-  node.textContent = text;
-
-  return node;
 }
 
-function createPanel(title, content) {
-  const panel = document.createElement("section");
-
-  panel.className = "panel";
-
-  panel.appendChild(
-    createText("h2", "", title)
+function renderAccount() {
+  const box = panel(
+    "Minha conta",
+    "Informações da sua conta ZYNOX."
   );
 
-  panel.appendChild(
-    createText("p", "page-description", content)
+  box.append(
+    node("p", "Usuário: " + ZYNOX.user.username),
+    node("p", "ID: " + ZYNOX.user.id),
+    node("p", "Cargo: " + ZYNOX.user.role),
+    node("p", "Discord: " + (
+      ZYNOX.user.discord_id || "Não vinculado"
+    ))
   );
 
-  return panel;
+  element("main-content").appendChild(box);
 }
 
-function renderAccount(container) {
-  const user = ZYNOX.user;
+function renderPlans() {
+  const box = panel("Minha assinatura");
 
-  container.appendChild(
-    createPanel("Nome de usuário", user.username)
-  );
+  if (isAdmin()) {
+    box.appendChild(
+      node("p", "Acesso administrativo ilimitado.")
+    );
+  } else {
+    const sub = ZYNOX.subscription;
 
-  container.appendChild(
-    createPanel(
-      "ID do Discord",
-      user.discord_id || "Não vinculado"
-    )
-  );
-
-  container.appendChild(
-    createPanel(
-      "Tipo de acesso",
-      user.role === "owner"
-        ? "Dono"
-        : user.role === "admin"
-          ? "Administrador"
-          : "Assinante"
-    )
-  );
-}
-
-function renderPlans(container) {
-  const subscription = ZYNOX.subscription;
-
-  container.appendChild(
-    createPanel(
-      "Plano atual",
-      subscription?.plan ||
-      (isAdmin()
-        ? "Acesso administrativo"
-        : "Sem assinatura")
-    )
-  );
-
-  if (subscription) {
-    const expiration = subscription.lifetime
-      ? "Vitalício"
-      : subscription.expires_at
-        ? new Date(
-            subscription.expires_at
-          ).toLocaleString("pt-BR")
-        : "Não informado";
-
-    container.appendChild(
-      createPanel("Validade", expiration)
+    box.append(
+      node("p", "Plano: " + (sub?.plan || "Nenhum")),
+      node("p", "Validade: " + (
+        sub?.lifetime
+          ? "Vitalício"
+          : formatDate(sub?.expires_at)
+      ))
     );
   }
+
+  element("main-content").appendChild(box);
 }
 
-function renderControl(container) {
-  container.appendChild(
-    createPanel(
-      "Gerenciamento de assinantes",
-      "Integração administrativa em desenvolvimento."
-    )
+// ESTATÍSTICAS ADMINISTRATIVAS
+
+async function controlStats(container) {
+  const data = await api("/api/control/stats");
+
+  const grid = node("div", undefined, "control-grid");
+
+  const items = [
+    ["Assinantes", data.subscribers],
+    ["Assinaturas ativas", data.activeSubscriptions],
+    ["Contas suspensas", data.suspended],
+    ["Keys disponíveis", data.availableLicenses],
+    ["Administradores", data.administrators]
+  ];
+
+  items.forEach(([label, value]) => {
+    const card = node("div", undefined, "control-stat");
+
+    card.append(
+      node("p", label),
+      node("h2", String(value))
+    );
+
+    grid.appendChild(card);
+  });
+
+  container.appendChild(grid);
+}
+
+// GERADOR DE LICENÇAS
+
+async function controlLicenses(container) {
+  if (!isOwner()) return;
+
+  const box = panel(
+    "Gerador de licenças",
+    "Crie keys de assinatura exclusivas."
   );
 
-  if (ZYNOX.user.role === "owner") {
-    container.appendChild(
-      createPanel(
-        "Gerador de licenças",
-        "Área exclusiva do proprietário."
+  const plan = select([
+    ["starter", "Starter"],
+    ["pro", "Pro"],
+    ["premium", "Premium"]
+  ]);
+
+  const duration = input("Duração", "number");
+  duration.value = "30";
+  duration.min = "1";
+
+  const unit = select([
+    ["minutes", "Minutos"],
+    ["hours", "Horas"],
+    ["days", "Dias"],
+    ["months", "Meses"],
+    ["years", "Anos"]
+  ]);
+
+  unit.value = "days";
+
+  const quantity = input("Quantidade", "number");
+  quantity.value = "1";
+  quantity.min = "1";
+  quantity.max = "50";
+
+  const lifetime = input("", "checkbox");
+
+  lifetime.addEventListener("change", () => {
+    duration.disabled = lifetime.checked;
+    unit.disabled = lifetime.checked;
+  });
+
+  const output = node("textarea");
+  output.className = "control-input";
+  output.readOnly = true;
+  output.rows = 6;
+  output.placeholder = "As keys aparecerão aqui.";
+
+  box.append(
+    field("Plano", plan),
+    field("Duração", duration),
+    field("Unidade", unit),
+    field("Quantidade", quantity),
+    field("Vitalício", lifetime),
+
+    button("Gerar licenças", async () => {
+      const data = await api(
+        "/api/owner/licenses/create",
+        {
+          plan: plan.value,
+          duration: Number(duration.value),
+          unit: unit.value,
+          duration_unit: unit.value,
+          quantity: Number(quantity.value),
+          lifetime: lifetime.checked
+        }
+      );
+
+      const keys = data.keys || data.licenses || [];
+
+      output.value = keys.map(item =>
+        typeof item === "string" ? item : item.key
+      ).filter(Boolean).join("\n");
+
+      if (!output.value) {
+        alert("Confira a resposta da API de licenças.");
+        return;
+      }
+
+      alert("Keys geradas. Copie e guarde agora.");
+    }),
+
+    output,
+
+    button("Copiar todas as keys", async () => {
+      if (!output.value) {
+        throw new Error("Nenhuma key gerada.");
+      }
+
+      await navigator.clipboard.writeText(output.value);
+      alert("Keys copiadas!");
+    })
+  );
+
+  container.appendChild(box);
+
+  const history = panel("Histórico de licenças");
+
+  const data = await api("/api/owner/licenses/list");
+
+  const licenses = data.licenses || [];
+
+  if (!licenses.length) {
+    history.appendChild(
+      node("p", "Nenhuma licença encontrada.")
+    );
+  }
+
+  licenses.forEach(license => {
+    const card = node("div", undefined, "control-item");
+
+    card.append(
+      node("h3", String(license.plan).toUpperCase()),
+      node("p", "ID: " + license.id),
+      node("p", "Status: " + license.status),
+      node("p", "Criada em: " + formatDate(
+        license.created_at
+      )),
+      node("p", "Utilizada por: " + (
+        license.username ||
+        license.redeemed_username ||
+        license.redeemed_by ||
+        "Ninguém"
+      ))
+    );
+
+    if (license.status !== "revoked") {
+      card.appendChild(
+        button("Revogar licença", async () => {
+          if (!confirm("Revogar esta licença?")) return;
+
+          await api(
+            "/api/owner/licenses/revoke",
+            { id: license.id }
+          );
+
+          alert("Licença revogada.");
+          await renderControl("licenses");
+        }, true)
+      );
+    }
+
+    history.appendChild(card);
+  });
+
+  container.appendChild(history);
+}
+
+// GERENCIAMENTO DE ASSINANTES
+
+async function controlUsers(container) {
+  const box = panel(
+    "Gerenciar assinantes",
+    "Controle contas, planos e períodos."
+  );
+
+  const data = await api("/api/control/users");
+  const users = data.users || [];
+
+  const search = input("Buscar usuário ou ID Discord");
+  const list = node("div");
+
+  function draw() {
+    list.replaceChildren();
+
+    const query = search.value.toLowerCase();
+
+    const filtered = users.filter(user =>
+      [
+        user.username,
+        user.discord_id,
+        user.id
+      ].some(value =>
+        String(value || "").toLowerCase().includes(query)
       )
     );
 
-    container.appendChild(
-      createPanel(
-        "Gerenciamento de administradores",
-        "Área exclusiva do proprietário."
+    if (!filtered.length) {
+      list.appendChild(node("p", "Nenhum assinante encontrado."));
+    }
+
+    filtered.forEach(user => {
+      const card = node("div", undefined, "control-item");
+
+      const plan = select([
+        ["starter", "Starter"],
+        ["pro", "Pro"],
+        ["premium", "Premium"]
+      ]);
+
+      plan.value = user.plan || "starter";
+
+      const days = input("Novo período em dias", "number");
+      days.value = "30";
+      days.min = "1";
+      days.max = "36500";
+
+      const lifetime = input("", "checkbox");
+
+      lifetime.checked = Boolean(user.lifetime);
+      days.disabled = lifetime.checked;
+
+      lifetime.addEventListener("change", () => {
+        days.disabled = lifetime.checked;
+      });
+
+      card.append(
+        node("h3", user.username),
+        node("p", "Discord: " + (user.discord_id || "—")),
+        node("p", "Conta: " + user.status),
+        node("p", "Plano atual: " + (user.plan || "Nenhum")),
+        node("p", "Assinatura: " + (
+          user.subscription_status || "Nenhuma"
+        )),
+        node("p", "Validade: " + (
+          user.lifetime
+            ? "Vitalício"
+            : formatDate(user.expires_at)
+        )),
+
+        field("Novo plano", plan),
+        field("Novo período em dias", days),
+        field("Vitalício", lifetime),
+
+        button("Atualizar assinatura", async () => {
+          if (!confirm(
+            "Substituir o período atual da assinatura?"
+          )) return;
+
+          await api(
+            "/api/control/subscriptions/update",
+            {
+              id: user.id,
+              plan: plan.value,
+              days: Number(days.value),
+              lifetime: lifetime.checked
+            }
+          );
+
+          alert("Assinatura atualizada.");
+          await renderControl("users");
+        }),
+
+        button(
+          user.status === "suspended"
+            ? "Reativar conta"
+            : "Suspender conta",
+
+          async () => {
+            const status = user.status === "suspended"
+              ? "active"
+              : "suspended";
+
+            if (!confirm("Alterar status desta conta?")) return;
+
+            await api(
+              "/api/control/users/status",
+              { id: user.id, status }
+            );
+
+            await renderControl("users");
+          },
+
+          user.status !== "suspended"
+        ),
+
+        button("Cancelar assinatura", async () => {
+          if (!confirm("Cancelar esta assinatura?")) return;
+
+          await api(
+            "/api/control/subscriptions/cancel",
+            { id: user.id }
+          );
+
+          await renderControl("users");
+        }, true)
+      );
+
+      list.appendChild(card);
+    });
+  }
+
+  search.addEventListener("input", draw);
+
+  box.append(search, list);
+  container.appendChild(box);
+
+  draw();
+}
+
+// ADMINISTRADORES
+
+async function controlAdmins(container) {
+  if (!isOwner()) return;
+
+  const box = panel(
+    "Criar administrador",
+    "Acesso exclusivo do proprietário."
+  );
+
+  const username = input("Nome de usuário");
+  username.autocomplete = "off";
+  username.autocapitalize = "none";
+
+  const password = input("Senha segura", "password");
+  password.autocomplete = "new-password";
+  password.minLength = 12;
+
+  box.append(
+    field("Usuário", username),
+    field("Senha", password),
+
+    button("Criar administrador", async () => {
+      try {
+        await api(
+          "/api/control/admins/create",
+          {
+            username: username.value.trim().toLowerCase(),
+            password: password.value
+          }
+        );
+
+        alert("Administrador criado.");
+        await renderControl("admins");
+
+      } finally {
+        password.value = "";
+      }
+    })
+  );
+
+  container.appendChild(box);
+
+  const list = panel("Administradores cadastrados");
+
+  const data = await api("/api/control/admins");
+
+  (data.admins || []).forEach(admin => {
+    const card = node("div", undefined, "control-item");
+
+    card.append(
+      node("h3", admin.username),
+      node("p", "Status: " + admin.status),
+      node("p", "Criado em: " + formatDate(admin.created_at)),
+
+      button(
+        admin.status === "suspended"
+          ? "Reativar administrador"
+          : "Suspender administrador",
+
+        async () => {
+          if (!confirm("Alterar status do administrador?")) return;
+
+          await api(
+            "/api/control/admins/status",
+            {
+              id: admin.id,
+              status: admin.status === "suspended"
+                ? "active"
+                : "suspended"
+            }
+          );
+
+          await renderControl("admins");
+        },
+
+        admin.status !== "suspended"
       )
+    );
+
+    list.appendChild(card);
+  });
+
+  if (!(data.admins || []).length) {
+    list.appendChild(
+      node("p", "Nenhum administrador cadastrado.")
+    );
+  }
+
+  container.appendChild(list);
+}
+
+// HISTÓRICO ADMINISTRATIVO
+
+async function controlLogs(container) {
+  if (!isOwner()) return;
+
+  const box = panel("Histórico administrativo");
+
+  const data = await api("/api/control/logs");
+
+  (data.logs || []).forEach(log => {
+    const card = node("div", undefined, "control-item");
+
+    card.append(
+      node("h3", log.action),
+      node("p", "Responsável: " + (
+        log.username || "Sistema"
+      )),
+      node("p", formatDate(log.created_at)),
+      node("p", log.details || "")
+    );
+
+    box.appendChild(card);
+  });
+
+  container.appendChild(box);
+}
+
+// INTERFACE ZYNOX CONTROL
+
+async function renderControl(tab = "stats") {
+  if (!isAdmin()) return;
+
+  if (ZYNOX.currentPage !== "control") return;
+
+  const main = element("main-content");
+
+  main.replaceChildren();
+
+  const header = panel(
+    "ZYNOX CONTROL",
+    isOwner()
+      ? "Painel exclusivo do proprietário."
+      : "Painel de administração."
+  );
+
+  const navigation = node(
+    "div",
+    undefined,
+    "control-navigation"
+  );
+
+  const tabs = [
+    ["stats", "Visão geral"],
+    ["users", "Assinantes"]
+  ];
+
+  if (isOwner()) {
+    tabs.push(
+      ["licenses", "Licenças"],
+      ["admins", "Administradores"],
+      ["logs", "Histórico"]
+    );
+  }
+
+  tabs.forEach(([key, label]) => {
+    const item = button(label, () => renderControl(key));
+
+    if (tab === key) {
+      item.classList.add("selected");
+    }
+
+    navigation.appendChild(item);
+  });
+
+  header.appendChild(navigation);
+
+  main.appendChild(header);
+
+  const content = node("div", undefined, "control-content");
+
+  const loading = node("p", "Carregando...");
+
+  content.appendChild(loading);
+  main.appendChild(content);
+
+  try {
+    loading.remove();
+
+    if (tab === "stats") {
+      await controlStats(content);
+    }
+
+    if (tab === "users") {
+      await controlUsers(content);
+    }
+
+    if (tab === "licenses") {
+      await controlLicenses(content);
+    }
+
+    if (tab === "admins") {
+      await controlAdmins(content);
+    }
+
+    if (tab === "logs") {
+      await controlLogs(content);
+    }
+
+  } catch (error) {
+    content.appendChild(
+      node("p", error.message, "control-error")
+    );
+
+    content.appendChild(
+      button("Tentar novamente", () => renderControl(tab))
     );
   }
 }
+
+// NAVEGAÇÃO PRINCIPAL
 
 function navigate(page) {
-  if (!Object.hasOwn(pageNames, page)) return;
+  if (!pageNames[page]) return;
 
-  if (page === "control" && !isAdmin()) {
-    return;
-  }
+  if (page === "control" && !isAdmin()) return;
 
   ZYNOX.currentPage = page;
 
-  const container = element("main-content");
-
   closeMenu();
-  updateNavigation(page);
+
+  document.querySelectorAll("[data-page]").forEach(item => {
+    item.classList.toggle(
+      "active",
+      item.dataset.page === page
+    );
+  });
+
+  const main = element("main-content");
+
+  main.replaceChildren();
 
   if (page === "home" || page === "dashboard") {
-    container.innerHTML = homeContent;
-
+    main.innerHTML = homeContent;
     updateProfile();
-
-    window.scrollTo(0, 0);
-
     return;
   }
 
-  container.replaceChildren();
-
-  container.appendChild(
-    createText(
-      "h1",
-      "page-title",
-      pageNames[page]
-    )
-  );
-
-  container.appendChild(
-    createText(
-      "p",
-      "page-description",
-      descriptions[page] || ""
-    )
-  );
+  if (page === "control") {
+    renderControl();
+    return;
+  }
 
   if (page === "account") {
-    renderAccount(container);
-
-  } else if (page === "plans") {
-    renderPlans(container);
-
-  } else if (page === "control") {
-    renderControl(container);
-
-  } else {
-    container.appendChild(
-      createText(
-        "div",
-        "empty-state",
-        "Esta funcionalidade está em desenvolvimento."
-      )
-    );
+    renderAccount();
+    return;
   }
+
+  if (page === "plans") {
+    renderPlans();
+    return;
+  }
+
+  if (page === "licenses" && isOwner()) {
+    ZYNOX.currentPage = "control";
+    renderControl("licenses");
+    return;
+  }
+
+  main.appendChild(
+    panel(
+      pageNames[page],
+      "Esta funcionalidade está em desenvolvimento."
+    )
+  );
 
   window.scrollTo(0, 0);
 }
@@ -313,69 +865,45 @@ async function logout() {
     });
 
     if (!response.ok) {
-      throw new Error("Falha ao sair");
+      throw new Error("Não foi possível sair.");
     }
 
     window.location.replace("/");
 
   } catch (error) {
-    alert("Não foi possível sair da conta.");
+    alert(error.message);
   }
 }
 
 function setupEvents() {
-  element("open-menu").addEventListener(
-    "click", openMenu
-  );
+  element("open-menu")?.addEventListener("click", openMenu);
 
-  element("close-menu").addEventListener(
-    "click", closeMenu
-  );
+  element("close-menu")?.addEventListener("click", closeMenu);
 
-  element("overlay").addEventListener(
-    "click", closeMenu
-  );
+  element("overlay")?.addEventListener("click", closeMenu);
 
-  element("logout").addEventListener(
-    "click", logout
-  );
+  element("logout")?.addEventListener("click", logout);
 
   document.addEventListener("click", event => {
-    const button = event.target.closest(
-      "[data-page]"
-    );
+    const target = event.target.closest("[data-page]");
 
-    if (button) {
-      navigate(button.dataset.page);
-    }
+    if (!target) return;
+
+    event.preventDefault();
+
+    navigate(target.dataset.page);
   });
 
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      closeMenu();
-    }
+    if (event.key === "Escape") closeMenu();
   });
 }
 
 async function initialize() {
   try {
-    const response = await fetch("/api/me", {
-      credentials: "same-origin",
-      cache: "no-store"
-    });
+    const data = await api("/api/me");
 
-    if (response.status === 401) {
-      window.location.replace("/");
-      return;
-    }
-
-    if (!response.ok) {
-      throw new Error("Servidor indisponível");
-    }
-
-    const data = await response.json();
-
-    if (!data.authenticated || !data.user) {
+    if (!data.authenticated) {
       window.location.replace("/");
       return;
     }
@@ -388,42 +916,31 @@ async function initialize() {
       return;
     }
 
-    homeContent =
-      element("main-content").innerHTML;
+    homeContent = element("main-content").innerHTML;
 
-    setupEvents();
     updateProfile();
-    updateNavigation("home");
+    setupEvents();
 
-    element("loading").hidden = true;
-    element("app").hidden = false;
+    if (element("loading")) {
+      element("loading").hidden = true;
+    }
+
+    if (element("app")) {
+      element("app").hidden = false;
+    }
 
   } catch (error) {
-    element("loading").replaceChildren();
+    const loading = element("loading");
 
-    element("loading").appendChild(
-      createText("h1", "", "ZYNOX")
-    );
+    if (loading) {
+      loading.replaceChildren(
+        node("p", error.message),
 
-    element("loading").appendChild(
-      createText(
-        "p",
-        "",
-        "Não foi possível conectar ao servidor."
-      )
-    );
-
-    const retry = createText(
-      "button",
-      "primary-button",
-      "Tentar novamente"
-    );
-
-    retry.addEventListener("click", () => {
-      window.location.reload();
-    });
-
-    element("loading").appendChild(retry);
+        button("Tentar novamente", () => {
+          window.location.reload();
+        })
+      );
+    }
   }
 }
 
