@@ -31,7 +31,7 @@ export async function ticketPanelApi(request,env,store,body){
  }catch(e){if(String(e).includes("ticket_panels"))return fail("Anúncio publicado, mas não salvo. Aplique a migração 0009 antes de usar.",503);throw e;}
  return json({success:true,id,message_id:message.id});
 }
-export async function ticketInteraction(interaction,env){
+async function ticketProcess(interaction,env){
  const cid=String(interaction.data?.custom_id||"");if(!cid.startsWith("ticket:"))return null;
  const parts=cid.split(":"),id=parts[1],user=interaction.member?.user||interaction.user;
  const ephemeral=content=>({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
@@ -51,4 +51,16 @@ export async function ticketInteraction(interaction,env){
  }catch(e){return ephemeral("Canal criado, mas não foi possível registrar o ticket. Avise o suporte do servidor: <#"+channel.id+">");}
  await discord(env,"/channels/"+channel.id+"/messages","POST",{content:"<@"+user.id+"> Seu atendimento foi aberto: **"+reason+"**. Aguarde a equipe.",allowed_mentions:{users:[user.id]}});
  return ephemeral("Ticket criado: <#"+channel.id+">");
+}
+
+export function ticketInteraction(interaction,env,ctx){
+ if(!String(interaction.data?.custom_id||"").startsWith("ticket:"))return null;
+ const reply=async content=>{
+  await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(env.DISCORD_CLIENT_ID)+"/"+encodeURIComponent(interaction.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(9000)});
+ };
+ ctx.waitUntil((async()=>{
+  try{const result=await ticketProcess(interaction,env);await reply(result?.data?.content||"Não foi possível abrir o ticket.");}
+  catch(error){console.error("ticket processing error",error?.name);try{await reply("Falha ao abrir ticket. Verifique permissões do bot e configuração do servidor.");}catch{}}
+ })());
+ return {type:5,data:{flags:64}};
 }
