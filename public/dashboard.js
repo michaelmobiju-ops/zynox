@@ -1049,10 +1049,27 @@ function navigate(page) {
         list.append(metrics([["Total de clientes",d.stats.customers]]),field("Buscar cliente",search),node("p","Até 100 clientes recentes."),results);
         const render=()=>{results.replaceChildren();const q=search.value.trim().toLowerCase();const items=d.customers.filter(c=>[c.username,c.discord_id].some(x=>String(x||"").toLowerCase().includes(q)));for(const c of items)results.append(card(c.username||"Cliente","Discord: "+c.discord_id,"Pedidos: "+c.orders,"Compras confirmadas: "+money(c.spent_cents),"Cadastro: "+formatDate(c.created_at)));if(!items.length)results.append(node("p","Nenhum cliente encontrado."));};search.addEventListener("input",render);render();
       }else if(page==="coupons"){
-        const code=input("Ex.: PROMO10"),discount=input("Desconto %","number");discount.min="1";discount.max="100";
-        list.append(field("Código",code),field("Desconto",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,code:code.value,discount:Number(discount.value)});await load();}),node("p","Cadastro de cupons disponível. Aplicação no carrinho ainda não implementada."));
-        for(const c of d.coupons)list.append(card(c.code,"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses));
+        const chooser=node("div"),form=node("div"),products=await api("/api/commerce/products?store="+encodeURIComponent(id));
+        const active=products.products.filter(p=>p.status!=="archived");
+        list.append(node("h3","Escolha um produto para aplicar desconto"),chooser,form);
+        if(!active.length){chooser.append(node("p","Cadastre um produto primeiro."));return;}
+        const productSelect=select([["","Selecione um produto"],...active.map(p=>[p.id,p.name])]);
+        const showForm=()=>{
+          form.replaceChildren();
+          if(!productSelect.value)return;
+          const p=active.find(x=>x.id===productSelect.value);
+          const code=input("Ex.: PROMO10"),discount=input("Desconto %","number");discount.min="1";discount.max="100";
+          form.append(node("h3","Criar cupom para "+p.name),field("Código do cupom",code),field("Desconto (%)",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,product_id:p.id,code:code.value,discount:Number(discount.value)});await load();}));
+        };
+        productSelect.addEventListener("change",showForm);
+        chooser.append(field("Produto",productSelect));
+        list.append(node("h3","Cupons cadastrados"));
+        for(const c of d.coupons){
+          const p=active.find(x=>x.id===c.product_id);
+          list.append(card(c.code,"Produto: "+(p?.name||"Cupom antigo sem produto definido"),"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses));
+        }
         if(!d.coupons.length)list.append(node("p","Nenhum cupom cadastrado."));
+        list.append(node("p","A aplicação do desconto no carrinho ainda não está habilitada."));
       }else{
         for(const t of d.tickets)list.append(card(t.subject||"Ticket","Status: "+(labels[t.status]||t.status),"Data: "+formatDate(t.created_at),"ID: "+t.id));
         if(!d.tickets.length)list.append(node("p","Nenhum ticket registrado."));
