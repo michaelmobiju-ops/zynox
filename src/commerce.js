@@ -23,6 +23,22 @@ export async function commerce(request,env,storeChannels){
   await env.DB.batch([env.DB.prepare("INSERT INTO products(id,store_id,name,description,image_url,color,button_text,has_variations,channel_id,status) VALUES(?,?,?,?,?,?,?,?,?,'draft')").bind(id,store.id,name,description,image,color,button,body.has_variations?1:0,channel),...variants.map(v=>env.DB.prepare("INSERT INTO variants(id,product_id,name,price_cents) VALUES(?,?,?,?)").bind(crypto.randomUUID(),id,v.name.trim(),v.price_cents))]);
   return json({success:true,id},201);
  }
+ if(path==="/api/commerce/publish"&&request.method==="POST"){
+  const p=await env.DB.prepare("SELECT * FROM products WHERE id=? AND store_id=?").bind(String(body.product_id||""),store.id).first();
+  if(!p)return fail("Produto não encontrado.",404);
+  const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
+  if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
+  const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
+  const payload={embeds:[embed],allowed_mentions:{parse:[]},components:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:true}]}]};
+  const locked=await env.DB.prepare("UPDATE products SET status='publishing' WHERE id=? AND store_id=? AND status IN ('draft','active')").bind(p.id,store.id).run();
+  if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
+  let response;
+  try{response=await call("/channels/"+p.channel_id+"/messages"+(p.message_id?"/"+p.message_id:""),{method:p.message_id?"PATCH":"POST",body:JSON.stringify({...payload,...(!p.message_id?{nonce:p.id.replaceAll("-","").slice(0,25),enforce_nonce:true}:{})})});}catch{return fail("Resultado incerto; confira o Discord antes de repetir.",502);}
+  if(!response.ok){await env.DB.prepare("UPDATE products SET status=? WHERE id=?").bind(p.status,p.id).run();return fail("Discord recusou a publicação.",502);}
+  const message=await response.json();
+  await env.DB.prepare("UPDATE products SET message_id=?,status='active' WHERE id=? AND store_id=?").bind(message.id,p.id,store.id).run();
+  return json({success:true,message_id:message.id});
+ }
  if(path==="/api/commerce/overview"&&request.method==="GET"){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,c.username FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   return json({orders,customers:await list("SELECT discord_id,username,created_at FROM customers WHERE store_id=? LIMIT 100",store.id),coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:await list("SELECT type,amount_cents,status,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id),gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? LIMIT 100",store.id)});
