@@ -881,6 +881,21 @@ function navigate(page) {
     return;
   }
 
+  if (page === "payments") {
+    const box=panel("Pagamentos Pix","Gere cobranças para pedidos pendentes usando o provedor conectado.");
+    const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
+    box.append(field("Loja",stores),status,list);main.append(box);
+    async function load(){const id=stores.value;list.replaceChildren();if(!id)return;const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));if(!d.orders.length)list.append(node("p","Nenhum pedido registrado."));
+      for(const order of d.orders){const card=node("div",undefined,"control-item");card.append(node("strong","Pedido "+order.id),node("p","Status: "+order.status+" • R$ "+(order.total_cents/100).toFixed(2).replace(".",",")));
+        if(order.status==="pending"){const name=input("Nome do comprador"),email=input("E-mail do comprador","email"),result=node("div");card.append(field("Nome",name),field("E-mail",email),button("Gerar Pix",async()=>{const p=await api("/api/commerce/pix",{store_id:id,order_id:order.id,buyer_name:name.value,buyer_email:email.value});result.replaceChildren(node("p","Pix copia e cola:"),node("textarea",p.payment.pix_code,"control-input"),button("Copiar Pix",()=>navigator.clipboard.writeText(p.payment.pix_code)),node("p","Validade: "+(p.payment.expires_at||"conforme provedor")));}));card.append(result);}
+        list.append(card);
+      }
+    }
+    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
+    return;
+  }
+
   if (page === "wallet" || page === "gateways") {
     const box=panel(page==="wallet"?"Carteira digital":"Conectar banco / provedor","Use somente tokens de API. Nunca informe senha bancária ou código de autenticação.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
