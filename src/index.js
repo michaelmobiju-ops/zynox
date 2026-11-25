@@ -443,10 +443,10 @@ export default {
         const scope="SELECT id FROM stores WHERE owner_id=? AND (?='' OR id=?)";
         const query=sql=>env.DB.prepare(sql.replaceAll("STORE_SCOPE",scope)).bind(user.id,id,id);
         const [orders,products,customers,days,recent]=await Promise.all([
-          query("SELECT count(*) AS orders,COALESCE(SUM(CASE WHEN status IN ('paid','delivered') THEN total_cents ELSE 0 END),0) AS revenue_cents,COALESCE(SUM(CASE WHEN status IN ('paid','delivered') THEN 1 ELSE 0 END),0) AS sales FROM orders WHERE store_id IN (STORE_SCOPE)").first(),
+          query("SELECT count(*) AS orders,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN total_cents ELSE 0 END),0) AS revenue_cents,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN 1 ELSE 0 END),0) AS sales FROM orders WHERE store_id IN (STORE_SCOPE)").first(),
           query("SELECT count(*) AS total FROM products WHERE status='active' AND store_id IN (STORE_SCOPE)").first(),
           query("SELECT count(*) AS total FROM customers WHERE store_id IN (STORE_SCOPE)").first(),
-          query("SELECT date(paid_at) AS day,sum(total_cents) AS cents,count(*) AS sales FROM orders WHERE store_id IN (STORE_SCOPE) AND status IN ('paid','delivered') AND date(paid_at) BETWEEN date('now','-6 days') AND date('now') GROUP BY date(paid_at) ORDER BY day").all(),
+          query("SELECT date(paid_at) AS day,sum(total_cents) AS cents,count(*) AS sales FROM orders WHERE store_id IN (STORE_SCOPE) AND status IN ('paid','delivering','delivered') AND date(paid_at) BETWEEN date('now','-6 days') AND date('now') GROUP BY date(paid_at) ORDER BY day").all(),
           query("SELECT o.id,o.status,o.total_cents,o.created_at,p.name AS product_name,s.name AS store_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id JOIN stores s ON s.id=o.store_id WHERE o.store_id IN (STORE_SCOPE) ORDER BY o.created_at DESC LIMIT 8").all()
         ]);
         return json({stores,metrics:{...orders,products:products.total,customers:customers.total},days:days.results,recent:recent.results});
