@@ -47,7 +47,8 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/sale-notifications"&&request.method==="POST"){
    const channel=String(body.channel_id||""),template=String(body.template||"classic"),imageUrl=String(body.image_url||"").trim();
-    if(imageUrl&&(imageUrl.length>2048||!/^https:\/\/[^\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s]*)?$/i.test(imageUrl)))return fail("Use um link HTTPS direto para PNG, JPG, WEBP ou GIF.");
+    const presetImage=/^\/notification-(classic|compact|premium)\.svg$/.test(imageUrl);
+    if(imageUrl&&(imageUrl.length>2048||(!presetImage&&!/^https:\/\/[^\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s]*)?$/i.test(imageUrl))))return fail("Selecione um modelo pronto ou use um link HTTPS direto para PNG, JPG, WEBP ou GIF.");
    if(!/^\\d{17,20}$/.test(channel)||!["classic","compact","premium"].includes(template))return fail("Canal ou modelo inválido.");
    const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
    if(!check.ok||!(await check.json()).channels?.some(c=>c.id===channel&&c.available))return fail("O bot não pode publicar neste canal.",403);
