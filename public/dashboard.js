@@ -831,6 +831,36 @@ function navigate(page) {
     return;
   }
 
+  if (page === "products") {
+    const box = panel("Produtos","Selecione a loja e o canal para preparar a publicação de produtos.");
+    const stores = select([["","Selecione a loja"]]);
+    const channels = select([["","Selecione o canal"]]);
+    const status = node("p","Carregando lojas...");
+    channels.disabled = true;
+    box.append(field("Loja",stores),field("Canal de vendas",channels),status);
+    main.append(box);
+    api("/api/store/channels").then(data=>{
+      for(const s of data.stores){const o=node("option",s.name);o.value=s.id;stores.append(o);}
+      status.textContent=data.stores.length?"Selecione uma loja.":"Vincule uma loja em Servidores primeiro.";
+    }).catch(e=>status.textContent=e.message);
+    stores.addEventListener("change",async()=>{
+      const id=stores.value;
+      channels.replaceChildren(new Option("Selecione o canal",""));
+      channels.disabled=true;
+      if(!id)return;
+      status.textContent="Consultando canais...";
+      try{
+        const data=await api("/api/store/channels?store="+encodeURIComponent(id));
+        if(stores.value!==id)return;
+        for(const c of data.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}
+        channels.disabled=false;
+        status.textContent="Escolha um canal disponível.";
+      }catch(e){status.textContent=e.message;}
+    });
+    channels.addEventListener("change",()=>{status.textContent=channels.value?"Canal selecionado. A criação e publicação de produtos será integrada na próxima etapa.":"Escolha um canal disponível.";});
+    return;
+  }
+
   if (page === "servers") {
     const box = panel("Servidores","Servidores com ZYNOX instalado e permissão de gerenciamento.");
     const list = node("div");
