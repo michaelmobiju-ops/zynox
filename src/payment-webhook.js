@@ -37,7 +37,8 @@ export async function paymentWebhook(request,env){
  if(provider==="asaas"&&event.transfer?.id){
   const transfer=event.transfer;
   const status=transfer.status==="DONE"?"completed":(["FAILED","CANCELLED"].includes(transfer.status)?"failed":"pending");
-  await env.DB.prepare("UPDATE wallet_transactions SET status=?,description=? WHERE external_reference=? AND type='withdrawal'").bind(status,"Saque Pix Asaas — "+String(transfer.status||"PENDING")+(transfer.failReason?" — "+String(transfer.failReason).slice(0,180):""),"asaas_transfer:"+transfer.id).run();
+  const description="Saque Pix Asaas — "+String(transfer.status||"PENDING")+(transfer.failReason?" — "+String(transfer.failReason).slice(0,180):"");
+  await env.DB.prepare("UPDATE wallet_transactions SET status=?,description=? WHERE type='withdrawal' AND (external_reference=? OR external_reference=?)").bind(status,description,"asaas_transfer:"+transfer.id,"withdrawal_request:"+String(transfer.externalReference||"").replace(/^zynox_withdrawal_/,"")).run();
   return json({received:true});
  }
  if(!paymentId)return json({received:true});
