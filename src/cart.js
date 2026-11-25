@@ -8,6 +8,8 @@ export async function cart(interaction,env){
  const productId=variantRef?.product_id||ref;
  const p=await env.DB.prepare("SELECT p.*,s.guild_id FROM products p JOIN stores s ON s.id=p.store_id WHERE p.id=? AND p.status='active'").bind(productId).first();
  if(!p||p.guild_id!==interaction.guild_id||p.channel_id!==interaction.channel_id||(action==="buy:"&&p.message_id!==interaction.message?.id))return reply("Produto indisponível.");
+ await env.DB.prepare("UPDATE orders SET status='expired' WHERE store_id=? AND status='pending' AND id IN (SELECT order_id FROM order_stock WHERE stock_id IN (SELECT id FROM stock WHERE status='reserved' AND reserved_until<=datetime('now')))").bind(p.store_id).run();
+ await env.DB.prepare("UPDATE stock SET status='available',reserved_until=NULL WHERE status='reserved' AND reserved_until<=datetime('now') AND variant_id IN (SELECT id FROM variants WHERE product_id=?)").bind(productId).run();
  const variants=(await env.DB.prepare("SELECT v.*,(SELECT count(*) FROM stock WHERE variant_id=v.id AND status='available') AS available FROM variants v WHERE product_id=?").bind(productId).all()).results;
  const available=variants.filter(v=>v.infinite_stock||v.available>0);
  if(!available.length)return reply("Produto sem estoque.");
