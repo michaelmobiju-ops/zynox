@@ -964,9 +964,22 @@ function navigate(page) {
       premium:"✦ ZYNOX • VENDA APROVADA\n🛍️ Gerador de Sensi\n👤 @cliente\n💰 Receita bruta: R$ 20,00"
     };
     const imageUrl=input("https://exemplo.com/imagem.gif","url");imageUrl.placeholder="Link direto da imagem ou GIF (HTTPS)";
+    const imagePicker=input("","file");imagePicker.accept="image/png,image/jpeg,image/webp,image/gif";imagePicker.style.display="none";
+    const uploadStatus=node("p","Envie uma imagem do celular ou informe o link direto.");
+    const uploadButton=button("Escolher imagem ou GIF do celular",()=>imagePicker.click());
+    imagePicker.addEventListener("change",async()=>{
+      const file=imagePicker.files?.[0];if(!file)return;
+      if(file.size>5*1024*1024){uploadStatus.textContent="Limite de 5 MB.";return;}
+      uploadStatus.textContent="Enviando imagem...";
+      try{
+        const response=await fetch("/api/media/sales?store="+encodeURIComponent(ZYNOX.store.id),{method:"POST",headers:{"Content-Type":file.type},body:file});
+        const data=await response.json();if(!response.ok)throw Error(data.error||"Falha no envio.");
+        imageUrl.value=data.url;show();uploadStatus.textContent="Imagem enviada. Clique em Salvar notificações.";
+      }catch(e){uploadStatus.textContent=e.message;}
+    });
     const imagePreview=node("img");imagePreview.alt="Prévia da imagem";imagePreview.style.cssText="display:none;max-width:100%;max-height:240px;object-fit:contain;border-radius:12px";
     const show=()=>{preview.textContent=examples[style.value];const url=imageUrl.value.trim();imagePreview.style.display=/^https:\/\//i.test(url)?"block":"none";if(imagePreview.style.display==="block")imagePreview.src=url;};style.addEventListener("change",show);imageUrl.addEventListener("input",show);show();preview.style.whiteSpace="pre-line";
-    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),field("Modelo visual",style),field("Imagem ou GIF da notificação",imageUrl),node("p","Use um link direto de imagem hospedada (PNG, JPG, WEBP ou GIF). Envio de arquivo do celular depende de armazenamento R2, ainda não configurado."),node("h3","Prévia do anúncio"),preview,imagePreview,button("Salvar notificações",async()=>{await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
+    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),field("Modelo visual",style),field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia do anúncio"),preview,imagePreview,button("Salvar notificações",async()=>{await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
     Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name,c.id);o.disabled=!c.available;channel.append(o);}if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||"";show();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar a migração 0007 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
