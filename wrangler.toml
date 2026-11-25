@@ -11,6 +11,8 @@ run_worker_first = true
 [vars]
 APP_NAME = "ZYNOX"
 APP_ENV = "production"
+DISCORD_CLIENT_ID = "1575192990132076637"
+DISCORD_REDIRECT_URI = "https://zynox.michael-mobiju.workers.dev/auth/discord/callback"
 
 [observability]
 enabled = true
