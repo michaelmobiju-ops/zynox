@@ -55,3 +55,11 @@ Antes de publicar esta versão, aplique `migrations/0002_wallet_idempotency.sql`
 7. Confira se a key é enviada por DM e se o pedido passa para entregue.
 8. Teste usuário com DMs bloqueadas; a entrega precisa ser tratada manualmente antes de produção.
 9. Não habilite produção até concluir todos os passos e revisar os logs.
+
+## Saques Pix via Asaas
+
+A carteira agora oferece solicitação de transferência Pix para chave CPF, CNPJ, e-mail, telefone ou EVP. O fluxo exige saldo suficiente tanto no livro-caixa da ZYNOX quanto no saldo disponível da conta Asaas conectada. A transferência é enviada por `POST /v3/transfers` e registrada inicialmente conforme o status retornado pelo Asaas.
+
+Configure o webhook Asaas no mesmo endpoint `/webhooks/payments`, com o token `ASAAS_WEBHOOK_TOKEN`, habilitando eventos de transferência. Os eventos `TRANSFER_DONE`, `TRANSFER_FAILED` e `TRANSFER_CANCELLED` atualizam o lançamento da carteira. Uma transferência criada ou pendente não deve ser apresentada como concluída.
+
+**Importante:** a transferência sai do saldo da conta Asaas vinculada à loja. Isso não é Open Finance nem conexão direta com contas de outros bancos. Mercado Pago ainda não oferece saque automático por este fluxo. Teste no Asaas Sandbox antes de usar produção.
