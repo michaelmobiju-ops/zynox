@@ -963,6 +963,30 @@ function navigate(page) {
     return;
   }
 
+  if (page === "notifications") {
+    const box=panel("Notificações","Avisos da sua conta ZYNOX.");
+    const list=node("div"),status=node("p","Carregando...");
+    async function load(){const d=await api("/api/notifications");list.replaceChildren();status.textContent=d.unread+" não lidas";for(const n of d.items){const c=node("div",undefined,"control-item");c.append(node("h3",n.title),node("p",n.message),node("p",formatDate(n.created_at)));if(!n.is_read)c.append(button("Marcar como lida",async()=>{await api("/api/notifications/read",{id:n.id});await load();}));list.append(c);}if(!d.items.length)list.append(node("p","Nenhuma notificação."));}
+    box.append(status,button("Marcar todas como lidas",async()=>{await api("/api/notifications/read",{all:true});await load();}),button("Atualizar",load),list);main.append(box);load().catch(e=>status.textContent=e.message);return;
+  }
+  if (["settings","integrations","automations"].includes(page)) {
+    const desc={settings:"Personalize os dados da sua loja.",integrations:"Confira as conexões e a disponibilidade dos serviços.",automations:"Acompanhe as entregas automáticas e a configuração de pagamentos."};
+    const box=panel(pageNames[page],desc[page]),stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
+    box.append(field("Loja",stores),status,content);main.append(box);
+    const card=(title,...lines)=>{const c=node("div",undefined,"control-item");c.append(node("h3",title),...lines.map(x=>node("p",x)));return c;};
+    async function load(){const id=stores.value;content.replaceChildren();if(!id)return;status.textContent="Carregando...";
+      const d=await api("/api/commerce/"+page+"?store="+encodeURIComponent(id));if(stores.value!==id)return;status.textContent="Dados atualizados.";
+      if(page==="settings"){
+        const name=input("Nome da loja");name.value=d.store.name;name.maxLength=100;content.append(field("Nome da loja",name),node("p","Servidor Discord: "+d.store.guild_id),button("Salvar alterações",async()=>{const result=await api("/api/commerce/settings",{store_id:id,name:name.value});stores.selectedOptions[0].textContent=result.name;status.textContent="Configurações salvas.";}));
+      }else if(page==="integrations"){
+        content.append(card("Discord","Servidor vinculado: "+d.discord.guild_id,d.discord.bot_configured?"Token do bot configurado":"Token do bot não configurado"),button("Gerenciar servidores",()=>navigate("servers")),node("h3","Provedores de pagamento"));for(const g of d.gateways)content.append(card(g.provider,g.status+(g.is_primary?" — principal":"")));if(!d.gateways.length)content.append(node("p","Nenhum provedor conectado."));content.append(button("Gerenciar gateways",()=>navigate("gateways")),card("ZYNOX Wallet","EM BREVE !"),card("Zynox AI","Ainda não disponível"),node("p","Pagamentos reais não habilitados."));
+      }else{
+        content.append(card("Entrega por DM",d.delivery.configured?"Credenciais configuradas":"Credenciais pendentes","Entrega de estoque finito após pagamento verificado. Estoque infinito ainda não suportado."),card("Pagamento Pix",d.payments.sandbox_enabled?"Ambiente de testes habilitado":"Cobranças desativadas"),node("h3","Últimos pedidos pagos"));for(const o of d.rows)content.append(card(o.product_name,o.status==="delivered"?"Entregue":"Entrega pendente","Pagamento: "+formatDate(o.paid_at),"Entrega: "+formatDate(o.delivered_at),"Pedido: "+o.id));if(!d.rows.length)content.append(node("p","Nenhuma entrega registrada."));content.append(node("p","A configuração de novas regras automáticas ainda está em desenvolvimento."));
+      }
+    }
+    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";}).catch(e=>status.textContent=e.message);return;
+  }
+
   if (page === "servers") {
     const box = panel("Servidores","Servidores com ZYNOX instalado e permissão de gerenciamento.");
     const list = node("div");
