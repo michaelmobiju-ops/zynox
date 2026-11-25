@@ -223,6 +223,27 @@ export default {
         );
       }
 
+      // Verificação do bot, exclusiva do proprietário.
+      if (path === "/api/owner/discord/status") {
+        if (request.method !== "GET") return json({error:"Método não permitido."},405);
+        const user = await getSession(request, env);
+        if (!user) return json({error:"Autenticação necessária."},401);
+        if (user.role !== "owner") return json({error:"Acesso restrito."},403);
+        if (!env.DISCORD_BOT_TOKEN) return json({connected:false,error:"Token não configurado."},503);
+        try {
+          const response = await fetch("https://discord.com/api/v10/users/@me", {
+            headers: {Authorization: "Bot " + env.DISCORD_BOT_TOKEN},
+            signal: AbortSignal.timeout(8000)
+          });
+          if (!response.ok) return json({connected:false,error:"Discord recusou a conexão.",discordStatus:response.status},502);
+          const bot = await response.json();
+          if (!bot.bot || bot.id !== env.DISCORD_CLIENT_ID) return json({connected:false,error:"Token de outra aplicação."},409);
+          return json({connected:true,bot:{id:bot.id,username:bot.username}});
+        } catch {
+          return json({connected:false,error:"Discord indisponível."},502);
+        }
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
