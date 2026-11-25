@@ -283,7 +283,7 @@ export default {
             const response=await fetch("https://discord.com/api/v10/users/"+encodeURIComponent(user.discord_id),{headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(3500)});
             if(response.ok){
               const d=await response.json();
-              discord_profile={display_name:d.global_name||d.username,avatar_url:d.avatar?"https://cdn.discordapp.com/avatars/"+d.id+"/"+d.avatar+".png?size=256":null,banner_url:d.banner?"https://cdn.discordapp.com/banners/"+d.id+"/"+d.banner+".png?size=1024":null};
+              discord_profile={display_name:d.global_name||d.username,avatar_url:d.avatar?"https://cdn.discordapp.com/avatars/"+d.id+"/"+d.avatar+(d.avatar.startsWith("a_")?".gif?size=256":".png?size=256"):null,banner_url:d.banner?"https://cdn.discordapp.com/banners/"+d.id+"/"+d.banner+(d.banner.startsWith("a_")?".gif?size=1024":".png?size=1024"):null};
             }
           }catch{}
         }
