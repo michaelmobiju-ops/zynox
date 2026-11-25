@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS coupons (
   id TEXT PRIMARY KEY,
   store_id TEXT NOT NULL,
+  product_id TEXT REFERENCES products(id),
   code TEXT NOT NULL,
   discount INTEGER NOT NULL
     CHECK(discount BETWEEN 1 AND 100),
@@ -268,3 +269,5 @@ CREATE TABLE IF NOT EXISTS sale_notifications (
  template TEXT NOT NULL DEFAULT 'classic' CHECK(template IN ('classic','compact','premium')),
  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1))
 );
+
+CREATE INDEX IF NOT EXISTS idx_coupons_product ON coupons(store_id,product_id);
