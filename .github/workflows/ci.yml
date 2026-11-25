@@ -26,3 +26,5 @@ jobs:
 
       - name: Test wallet ledger schema and balances
         run: python3 -m unittest discover -s tests -v
+      - name: Test payment webhook security and transfer reconciliation
+        run: npm test
