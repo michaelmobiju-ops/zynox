@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>ZYNOX | Dashboard</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <script src="/dashboard.js" defer></script>
+</head>
+
+<body>
+
+  <div id="loading">
+    <h1>ZYNOX</h1>
+    <p>Verificando acesso...</p>
+  </div>
+
+  <div id="app" hidden>
+
+    <header class="topbar">
+      <a href="/dashboard" class="logo">ZYNOX</a>
+
+      <div class="profile">
+        <span id="username">Usuário</span>
+        <span id="user-plan">Plano</span>
+      </div>
+    </header>
+
+    <div id="overlay" hidden></div>
+
+    <aside id="sidebar" hidden>
+
+      <div class="sidebar-header">
+        <h2>ZYNOX</h2>
+        <button id="close-menu">✕</button>
+      </div>
+
+      <nav id="navigation">
+
+        <small>PRINCIPAL</small>
+
+        <button data-page="home">Início</button>
+        <button data-page="dashboard">Dashboard</button>
+        <button data-page="bot">Meu bot</button>
+        <button data-page="servers">Servidores</button>
+
+        <small>GERENCIAMENTO</small>
+
+        <button data-page="products">Produtos</button>
+        <button data-page="stock">Estoque</button>
+        <button data-page="sales">Vendas</button>
+        <button data-page="coupons">Cupons e ofertas</button>
+        <button data-page="customers">Clientes</button>
+        <button data-page="automations">Automações</button>
+        <button data-page="tickets">Tickets</button>
+
+        <small>FINANCEIRO</small>
+
+        <button data-page="payments">Pagamentos</button>
+        <button data-page="gateways">Gateways e bancos</button>
+        <button data-page="wallet">Carteira digital</button>
+
+        <small>FERRAMENTAS</small>
+
+        <button data-page="ai">Zynox AI</button>
+        <button data-page="reports">Relatórios</button>
+        <button data-page="integrations">Integrações</button>
+
+        <small>CONTA</small>
+
+        <button data-page="plans">Planos</button>
+        <button data-page="licenses">Licenças</button>
+        <button data-page="notifications">Notificações</button>
+        <button data-page="settings">Configurações</button>
+        <button data-page="support">Suporte</button>
+        <button data-page="account">Minha conta</button>
+
+        <div id="admin-navigation" hidden>
+          <small>ADMINISTRAÇÃO</small>
+          <button data-page="control">Zynox Control</button>
+        </div>
+
+        <button id="logout" class="logout">
+          Sair da conta
+        </button>
+
+      </nav>
+    </aside>
+
+    <main id="main-content">
+
+      <section class="welcome">
+        <span class="tag">PAINEL DE CONTROLE</span>
+        <h1>Olá, <span id="welcome-name">usuário</span>!</h1>
+        <p>Gerencie sua operação em um único lugar.</p>
+      </section>
+
+      <section class="metrics">
+
+        <article class="metric">
+          <span>Receita total</span>
+          <strong id="total-revenue">—</strong>
+          <small>Aguardando integração</small>
+        </article>
+
+        <article class="metric">
+          <span>Vendas realizadas</span>
+          <strong id="total-sales">—</strong>
+          <small>Aguardando integração</small>
+        </article>
+
+        <article class="metric">
+          <span>Produtos ativos</span>
+          <strong id="total-products">—</strong>
+          <small>Aguardando integração</small>
+        </article>
+
+        <article class="metric">
+          <span>Clientes</span>
+          <strong id="total-customers">—</strong>
+          <small>Aguardando integração</small>
+        </article>
+
+      </section>
+
+      <section class="panel">
+        <h2>Desempenho de vendas</h2>
+        <div id="sales-chart" class="chart">
+          <p>Nenhum relatório disponível.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Ações rápidas</h2>
+
+        <div class="quick-actions">
+          <button data-page="products">
+            Criar produto
+          </button>
+
+          <button data-page="servers">
+            Conectar servidor
+          </button>
+
+          <button data-page="gateways">
+            Configurar pagamentos
+          </button>
+
+          <button data-page="stock">
+            Gerenciar estoque
+          </button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Atividades recentes</h2>
+        <div id="recent-activities">
+          Nenhuma atividade disponível.
+        </div>
+      </section>
+
+    </main>
+
+    <button id="open-menu" aria-label="Abrir menu">
+      ☰
+    </button>
+
+  </div>
+
+</body>
+</html>
