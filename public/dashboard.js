@@ -1029,7 +1029,6 @@ function navigate(page) {
       const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao enviar imagem.");
       imageUrl.value=data.url;imagePreview.src=data.url;uploadStatus.textContent="Imagem editada enviada. Agora clique em Salvar notificações.";renderPresets();renderOverlay();
     });
-    const originalShow=show;
     const refreshEditor=()=>{renderOverlay();};
     imagePreview.addEventListener("load",refreshEditor);
     stageImage.addEventListener("load",renderOverlay);
@@ -1037,6 +1036,7 @@ function navigate(page) {
     style.addEventListener("change",()=>requestAnimationFrame(renderOverlay));
     presets.addEventListener("click",()=>requestAnimationFrame(renderOverlay));
     imagePicker.addEventListener("change",()=>setTimeout(renderOverlay,100));
+    requestAnimationFrame(renderOverlay);
     config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,editTitle,field("Texto da imagem",editText),editHint,field("Tamanho da fonte",textSize),field("Cor do texto",textColor),field("Posição horizontal",textX),field("Posição vertical",textY),imageStage,exportButton,button("Salvar notificações",async()=>{if(!channel.value)throw Error("Selecione primeiro o canal do Discord para publicar as notificações.");await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
     Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name+(c.available?"":" (sem permissão)"),c.id);o.disabled=!c.available;channel.append(o);}if(!n.settings&&d.channels.filter(c=>c.available).length===1)channel.value=d.channels.find(c=>c.available).id;if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||presetUrl(style.value);show();renderPresets();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar as migrações 0007 e 0010 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
