@@ -21,3 +21,11 @@ enabled = true
 binding = "DB"
 database_name = "zynox-db"
 database_id = "4459b94d-2dc3-4ae6-8a2a-1d48c25097a0"
+
+[[ratelimits]]
+name = "LOGIN_RATE_LIMITER"
+namespace_id = "1001"
+
+[ratelimits.simple]
+limit = 5
+period = 60
