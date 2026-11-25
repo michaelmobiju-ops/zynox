@@ -5,17 +5,9 @@ import {
   logout
 } from "./auth.js";
 
-import {
-  handleLicenses
-} from "./licenses.js";
-
-import {
-  adminLogin
-} from "./admin-auth.js";
-
-import {
-  setupOwner
-} from "./owner.js";
+import { handleLicenses } from "./licenses.js";
+import { adminLogin } from "./admin-auth.js";
+import { handleControl } from "./control.js";
 
 const privateHeaders = {
   "Cache-Control": "no-store",
@@ -42,7 +34,11 @@ function json(data, status = 200) {
 
 async function getSubscription(env, userId) {
   return await env.DB.prepare(`
-    SELECT plan, status, expires_at, lifetime
+    SELECT
+      plan,
+      status,
+      expires_at,
+      lifetime
     FROM subscriptions
     WHERE user_id = ?
       AND status = 'active'
@@ -113,10 +109,17 @@ export default {
         return await adminLogin(request, env);
       }
 
-      // CONFIGURAÇÃO INICIAL DO DONO
+      // CONFIGURAÇÃO INICIAL DESATIVADA
 
-      if (path === "/api/setup/owner") {
-        return await setupOwner(request, env);
+      if (
+        path === "/api/setup/owner" ||
+        path === "/setup" ||
+        path === "/setup/" ||
+        path === "/setup.html"
+      ) {
+        return json({
+          error: "Configuração inicial desativada."
+        }, 404);
       }
 
       // ENCERRAR SESSÃO
@@ -142,6 +145,12 @@ export default {
       // USUÁRIO AUTENTICADO
 
       if (path === "/api/me") {
+        if (request.method !== "GET") {
+          return json({
+            error: "Método não permitido."
+          }, 405);
+        }
+
         const user = await getSession(request, env);
 
         if (!user) {
@@ -158,6 +167,12 @@ export default {
           user,
           subscription
         });
+      }
+
+      // ZYNOX CONTROL
+
+      if (path.startsWith("/api/control/")) {
+        return await handleControl(request, env);
       }
 
       // SISTEMA DE LICENÇAS
@@ -183,7 +198,7 @@ export default {
           name: "ZYNOX",
           status: "online",
           database: "connected",
-          version: "1.4.0"
+          version: "1.5.0"
         });
       }
 
@@ -210,6 +225,7 @@ export default {
             discordLogin: true,
             licenses: true,
             adminLogin: true,
+            control: true,
             wallet: false,
             artificialIntelligence: false
           }
@@ -295,14 +311,12 @@ export default {
           user.role !== "owner"
         ) {
           return json({
-            error:
-              "Acesso exclusivo do proprietário."
+            error: "Acesso exclusivo do DONO."
           }, 403);
         }
 
         return json({
-          error:
-            "Funcionalidade ainda indisponível."
+          error: "Funcionalidade ainda indisponível."
         }, 501);
       }
 
