@@ -210,6 +210,7 @@ function updateProfile() {
       : ZYNOX.subscription?.plan?.toUpperCase()
         || "SEM PLANO";
 
+  if(element("selected-server"))element("selected-server").textContent=ZYNOX.store?.name||"Selecionar servidor";
   if (element("username")) {
     element("username").textContent = user.username;
   }
@@ -803,6 +804,7 @@ async function renderControl(tab = "stats") {
 async function loadHomeDashboard() {
   const main=element("main-content");
   const selector=element("dashboard-store");
+  if(selector&&ZYNOX.store){selector.replaceChildren(new Option(ZYNOX.store.name,ZYNOX.store.id));selector.disabled=true;}
   const status=element("dashboard-status");
   if(!selector||!status)return;
   const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
@@ -813,7 +815,7 @@ async function loadHomeDashboard() {
     try{
       const d=await api("/api/dashboard/summary?store="+encodeURIComponent(selector.value));
       if(current!==serial||!main.contains(selector))return;
-      if(selector.options.length===1){for(const s of d.stores)selector.append(new Option(s.name,s.id));}
+      if(!ZYNOX.store&&selector.options.length===1){for(const s of d.stores)selector.append(new Option(s.name,s.id));}
       const m=d.metrics;
       element("total-revenue").textContent=money(m.revenue_cents);
       element("total-sales").textContent=String(m.sales);
@@ -838,6 +840,7 @@ async function loadHomeDashboard() {
 
 function navigate(page) {
   if (!pageNames[page]) return;
+  if (!ZYNOX.store && !["servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
 
   if (page === "control" && !isAdmin()) return;
 
@@ -916,7 +919,7 @@ function navigate(page) {
       for(const c of result.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}channels.value=product?.channel_id||"";channels.disabled=Boolean(product?.message_id);
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";if(d.stores.length===1){stores.value=d.stores[0].id;return load();}}).catch(e=>status.textContent=e.message);
+    api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);
     return;
   }
 
@@ -950,7 +953,7 @@ function navigate(page) {
       }status.textContent="Pedidos atualizados.";
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);return;
+    api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent="Servidor selecionado.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);return;
   }
 
   if (page === "wallet") {
@@ -983,7 +986,7 @@ function navigate(page) {
         content.append(node("h3","Conexões"));for(const g of d.gateways){const c=node("div",undefined,"control-item");c.append(node("strong",g.provider),node("p",g.status+(g.is_primary?" • principal":"")));content.append(c);}
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
+    api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent="Servidor selecionado.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);
     return;
   }
 
@@ -1025,7 +1028,7 @@ function navigate(page) {
       }
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";}).catch(e=>status.textContent=e.message);
+    api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent="Servidor selecionado.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);
     return;
   }
 
@@ -1066,39 +1069,31 @@ function navigate(page) {
         content.append(card("Entrega por DM",d.delivery.configured?"Credenciais configuradas":"Credenciais pendentes","Entrega de estoque finito após pagamento verificado. Estoque infinito ainda não suportado."),card("Pagamento Pix",d.payments.sandbox_enabled?"Ambiente de testes habilitado":"Cobranças desativadas"),node("h3","Últimos pedidos pagos"));for(const o of d.rows)content.append(card(o.product_name,o.status==="delivered"?"Entregue":"Entrega pendente","Pagamento: "+formatDate(o.paid_at),"Entrega: "+formatDate(o.delivered_at),"Pedido: "+o.id));if(!d.rows.length)content.append(node("p","Nenhuma entrega registrada."));content.append(node("p","A configuração de novas regras automáticas ainda está em desenvolvimento."));
       }
     }
-    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";}).catch(e=>status.textContent=e.message);return;
+    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent="Servidor selecionado.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);return;
   }
 
   if (page === "servers") {
-    const box = panel("Servidores","Servidores com ZYNOX instalado e permissão de gerenciamento.");
-    const list = node("div");
-    const load = async () => {
-      list.replaceChildren(node("p","Consultando Discord..."));
-      try {
-        const data = await api("/api/discord/servers");
-        list.replaceChildren();
-        if (data.needsDiscord) list.append(node("p","Vincule sua conta administrativa ao Discord."),button("Vincular Discord",()=>{window.location.href="/auth/discord/link";}));
-        else if (!data.servers.length) list.append(node("p","Nenhum servidor autorizado encontrado."));
-        for (const server of data.servers) {
-          const card = node("div",undefined,"control-item");
-          card.append(node("h3",server.name),node("p",server.linked?"Loja vinculada":"Disponível para vinculação"));
-          if (!server.linked) {
-            const name = input("Nome da loja");
-            name.value = server.name;
-            card.append(field("Nome da loja",name),button("Vincular loja",async()=>{
-              await api("/api/discord/store/link",{guild_id:server.id,name:name.value.trim()});
-              await load();
-            }));
-          }
-          list.append(card);
-        }
-        if (data.limited) list.append(node("p","Consulta inicial limitada a 20 servidores."));
-      } catch (error) { list.replaceChildren(node("p",error.message,"control-error")); }
-    };
-    box.append(button("Atualizar servidores",load),list);
-    main.append(box);
-    load();
-    return;
+    const box=panel("Selecionar servidor","Escolha o servidor que deseja gerenciar.");
+    const list=node("div"),invite=node("a","+ Adicionar ZYNOX ao servidor","control-button");
+    invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";invite.target="_blank";invite.rel="noopener noreferrer";
+    async function load(){
+      list.replaceChildren(node("p","Carregando servidores..."));
+      const d=await api("/api/server-controls");list.replaceChildren();
+      for(const server of d.stores){
+        const card=node("div",undefined,"control-item");
+        card.append(node("h3",server.name),node("p",server.removed_at?"Removido":server.enabled?"Operação habilitada":"Operação pausada"),node("p",server.enabled_since?"Habilitado desde: "+formatDate(server.enabled_since):"Vinculado em: "+formatDate(server.created_at)),node("p","Presença online não monitorada (bot HTTP)."));
+        if(!server.removed_at)card.append(button("Abrir dashboard",()=>{ZYNOX.store=server;updateProfile();navigate("home");}),button(server.enabled?"Pausar bot":"Reativar bot",async()=>{await api("/api/server-controls/action",{store_id:server.id,action:server.enabled?"pause":"resume"});await load();}),button("Remover bot",async()=>{if(!confirm("Remover ZYNOX deste servidor? Os registros da loja serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id)ZYNOX.store=null;await load();},true));
+        list.append(card);
+      }
+      const discord=await api("/api/discord/servers");
+      if(discord.needsDiscord)list.append(button("Vincular Discord",()=>location.href="/auth/discord/link"));
+      for(const g of discord.servers||[]){
+        const existing=d.stores.find(x=>x.guild_id===g.id);
+        if(!existing||existing.removed_at){const card=node("div",undefined,"control-item");card.append(node("h3",g.name),button("Vincular servidor",async()=>{await api("/api/discord/store/link",{guild_id:g.id,name:g.name});const fresh=await api("/api/server-controls");const linked=fresh.stores.find(x=>x.guild_id===g.id);if(linked?.removed_at)await api("/api/server-controls/action",{store_id:linked.id,action:"resume"});await load();}));list.append(card);}
+      }
+    }
+    box.append(invite,button("Atualizar servidores",load),list,button("Minha conta",()=>navigate("account")));if(isAdmin())box.append(button("ZYNOX CONTROL",()=>navigate("control")));
+    main.append(box);load().catch(e=>list.append(node("p",e.message,"control-error")));return;
   }
 
   if (page === "bot") {
@@ -1219,7 +1214,7 @@ async function initialize() {
     if (element("app")) {
       element("app").hidden = false;
     }
-    loadHomeDashboard();
+    navigate("servers");
 
   } catch (error) {
     const loading = element("loading");
