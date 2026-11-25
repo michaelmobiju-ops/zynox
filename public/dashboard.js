@@ -252,7 +252,7 @@ function renderAccount(){
   for(const [label,value] of [["Usuário",ZYNOX.user.username],["ID da conta",ZYNOX.user.id],["Cargo",ZYNOX.user.role==="owner"?"Proprietário":ZYNOX.user.role==="admin"?"Administrador":"Assinante"],["Plano",isAdmin()?"Acesso administrativo ilimitado":sub?.plan?.toUpperCase()||"Sem plano"],["Validade",isAdmin()?"Ilimitada":sub?.lifetime?"Vitalícia":formatDate(sub?.expires_at)],["Discord ID",ZYNOX.user.discord_id||"Não vinculado"],["Situação da conta",ZYNOX.user.status||"Ativa"]]){
     const item=node("div",undefined,"account-detail");item.append(node("span",label),node("strong",value));details.append(item);
   }
-  box.append(hero,details,button("Atualizar plano",()=>navigate("plans")));
+  box.append(hero,details,button("Atualizar plano",()=>navigate("plans")),button("Gerenciar meus servidores",()=>navigate("servers")));
   element("main-content").append(box);
 }
 
@@ -1002,28 +1002,35 @@ function navigate(page) {
   }
 
   if (page === "gateways") {
-    const box=panel("Conectar banco / provedor","Use somente tokens de API. Nunca informe senha bancária ou código de autenticação.");
-    const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
-    box.append(status,content);main.append(box);
-    async function load(){
-      const id=stores.value;content.replaceChildren();if(!id)return;
-        const m=await api("/api/commerce/manual-pix?store="+encodeURIComponent(id));if(stores.value!==id)return;
-        const bank=select([["nubank","Nubank"],["picpay","PicPay"],["itau","Itaú"],["other","Outro banco"]]),type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
-        if(m.settings){bank.value=m.settings.bank;type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
-        content.append(node("h3","Pix manual — "+(m.settings?.enabled?"Ativo":"Desativado")),field("Banco",bank),field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar e ativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:id,bank:bank.value,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});await load();}));
-        if(m.settings?.enabled)content.append(button("Desativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:id,enabled:false});await load();}));
-        content.append(node("h3","Integrações automáticas"),node("p","Nubank — disponível por Pix manual. PicPay e Itaú — integração API em desenvolvimento, exige habilitação comercial."));
-        const pic=node("div",undefined,"control-item"),client=input("Client ID"),secret=input("Client Secret","password"),picStatus=node("p","Homologação — não gera cobranças reais.");
-        pic.append(node("h3","PicPay automático"),picStatus,field("Client ID de teste",client),field("Client Secret de teste",secret),button("Validar credenciais",async()=>{try{const d=await api("/api/commerce/picpay/test",{store_id:id,client_id:client.value,client_secret:secret.value});picStatus.textContent=d.message;}finally{secret.value="";}}));
-        const itau=node("div",undefined,"control-item");itau.append(node("h3","Itaú automático"),node("p","Em desenvolvimento — requer habilitação e certificados bancários."));content.append(pic,itau);
-        const provider=select([["mercadopago","Mercado Pago"],["asaas","Asaas — produção"],["asaas_sandbox","Asaas — sandbox"]]),token=input("Cole o token de API","password");
-        content.append(field("Provedor",provider),field("Token de API",token),button("Validar e conectar",async()=>{status.textContent="Validando credencial...";const d=await api("/api/commerce/gateways",{store_id:id,provider:provider.value,api_token:token.value});token.value="";status.textContent="Conectado: "+d.gateway.account;await load();}));
-        const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));
-        content.append(node("h3","Conexões"));for(const g of d.gateways){const c=node("div",undefined,"control-item");c.append(node("strong",g.provider),node("p",g.status+(g.is_primary?" • principal":"")));content.append(c);}
+    const box=panel("Gateways e bancos","Escolha a opção abaixo.");
+    const nav=node("div",undefined,"control-navigation"),content=node("div");
+    const options=[["pix","Pix manual"],["banks","Bancos"],["gateways","Gateways"]];
+    const banks=[["nubank","Nubank"],["mercadopago","Mercado Pago"],["picpay","PicPay"],["itau","Itaú"],["inter","Banco Inter"],["bradesco","Bradesco"],["caixa","Caixa"],["bb","Banco do Brasil"],["santander","Santander"],["other","Outro banco"]];
+    let tab="pix",selectedBank="nubank";
+    const bankNames=Object.fromEntries(banks);
+    function render(){
+      content.replaceChildren();nav.replaceChildren();
+      for(const [key,title] of options){const b=button(title,()=>{tab=key;render();});if(key===tab)b.classList.add("selected");nav.append(b);}
+      if(tab==="gateways"){content.append(node("h3","Gateways"),node("p","EM BREVE !"));return;}
+      if(tab==="banks"){
+        content.append(node("h3","Selecione seu banco"));
+        const grid=node("div",undefined,"zynox-bank-grid");
+        for(const [id,name] of banks){const b=button(name,()=>{selectedBank=id;tab="pix";render();});if(id===selectedBank)b.classList.add("selected");grid.append(b);}
+        content.append(grid);return;
+      }
+      const status=node("p","Carregando configuração...");content.append(node("h3","Pix manual"),node("p","Banco selecionado: "+bankNames[selectedBank]),button("Trocar banco",()=>{tab="banks";render();}),status);
+      api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
+        if(tab!=="pix")return;
+        const type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
+        if(m.settings){selectedBank=m.settings.bank;type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
+        status.textContent=m.settings?.enabled?"Pix manual ativo":"Pix manual desativado";
+        content.append(field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar Pix manual",async()=>{
+          await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,bank:selectedBank,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});toast("Pix manual salvo.",true);render();
+        }));
+        if(m.settings?.enabled)content.append(button("Desativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,enabled:false});render();}));
+      }).catch(e=>toast(e.message));
     }
-    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent="Servidor selecionado.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);
-    return;
+    box.append(nav,content);main.append(box);render();return;
   }
 
   if (["sales","customers","coupons","tickets","reports"].includes(page)) {
