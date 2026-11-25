@@ -1,3 +1,4 @@
+import {announceSale} from "./sale-notifications.js";
 const hex=s=>Uint8Array.from(String(s).match(/../g)||[],x=>parseInt(x,16));
 const json=(data,status=200)=>Response.json(data,{status});
 async function decryptStock(value,variantId,secret){
@@ -58,7 +59,7 @@ export async function paymentWebhook(request,env){
   return json({received:true});
  }
  if(!paymentId)return json({received:true});
- const row=await env.DB.prepare("SELECT pay.*,g.provider,g.credentials_encrypted,o.id order_id,o.total_cents,o.store_id,st.wallet_enabled FROM payments pay JOIN gateways g ON g.id=pay.gateway_id JOIN orders o ON o.id=pay.order_id JOIN stores st ON st.id=o.store_id WHERE pay.external_id=? AND (g.provider=? OR (?='asaas' AND g.provider='asaas_sandbox'))").bind(String(paymentId),provider,provider).first();
+ const row=await env.DB.prepare("SELECT pay.*,g.provider,g.credentials_encrypted,o.id order_id,o.total_cents,o.store_id FROM payments pay JOIN gateways g ON g.id=pay.gateway_id JOIN orders o ON o.id=pay.order_id WHERE pay.external_id=? AND (g.provider=? OR (?='asaas' AND g.provider='asaas_sandbox'))").bind(String(paymentId),provider,provider).first();
  if(!row)return json({received:true});
  const [ivHex,cipherHex]=String(row.credentials_encrypted||"").split(":");
  if(!env.GATEWAY_ENCRYPTION_KEY||!ivHex||!cipherHex)return json({error:"Gateway configuration missing"},503);
@@ -79,9 +80,9 @@ export async function paymentWebhook(request,env){
  if(amount!==row.amount_cents||reference!=="zynox_"+row.order_id)return json({error:"Payment details mismatch"},409);
  await env.DB.batch([
   env.DB.prepare("UPDATE payments SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.id),
-  env.DB.prepare("UPDATE orders SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.order_id),
-  env.DB.prepare("INSERT OR IGNORE INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) SELECT ?,?,'sale',?,?, 'completed',? WHERE ?=1 AND EXISTS(SELECT 1 FROM payments WHERE id=? AND status='paid')").bind("payment:"+row.id,row.store_id,row.amount_cents,"payment:"+row.id,"Venda confirmada — pedido "+row.order_id,row.wallet_enabled,row.id)
+  env.DB.prepare("UPDATE orders SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.order_id)
  ]);
+ try{await announceSale(env,row.order_id);}catch{}
  await deliver(env,row.order_id);
  return json({received:true});
 }
