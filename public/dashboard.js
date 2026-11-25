@@ -1029,10 +1029,13 @@ function navigate(page) {
        content.append(node("h3",tab==="banks"?"Informações do banco":"Pix manual"),node("p","Banco: "+bankNames[selectedBank]),status);
        api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
         if(tab!=="pix"&&tab!=="banks")return;
-        const type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
-        if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;}if(m.settings.bank===selectedBank){type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}}
+        const type={value:"CPF"},typeChoice=node("div",undefined,"zynox-choice"),typeButton=button("CPF ▾",()=>{typeOptions.hidden=!typeOptions.hidden;}),typeOptions=node("div",undefined,"zynox-choice-options");
+         for(const [code,label] of [["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]])typeOptions.append(button(label,()=>{type.value=code;typeButton.textContent=label+" ▾";typeOptions.hidden=true;}));
+         typeOptions.hidden=true;typeChoice.append(typeButton,typeOptions);
+         const key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
+        if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;render();return;}if(m.settings.bank===selectedBank){type.value=m.settings.key_type;typeButton.textContent=({"CPF":"CPF","CNPJ":"CNPJ","EMAIL":"E-mail","PHONE":"Telefone (+55)","EVP":"Chave aleatória"}[type.value]||"CPF")+" ▾";key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}}
         status.textContent=m.settings?.enabled&&m.settings.bank===selectedBank?"Pix manual cadastrado para "+bankNames[selectedBank]+" — sem conexão bancária automática":"Banco ainda não cadastrado";
-        content.append(field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar Pix manual",async()=>{
+        content.append(field("Tipo de chave",typeChoice),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar Pix manual",async()=>{
           await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,bank:selectedBank,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});toast("Pix manual salvo. Não é uma conexão bancária automática.",true);bankLoaded=true;render();
         }));
         if(m.settings?.enabled)content.append(button("Desativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,enabled:false});render();}));
