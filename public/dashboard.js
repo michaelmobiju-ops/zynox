@@ -1082,9 +1082,40 @@ function navigate(page) {
         if(!d.coupons.length)list.append(node("p","Nenhum cupom cadastrado."));
         list.append(node("p","A aplicação do desconto no carrinho ainda não está habilitada."));
       }else{
-        for(const t of d.tickets)list.append(card(t.subject||"Ticket","Status: "+(labels[t.status]||t.status),"Data: "+formatDate(t.created_at),"ID: "+t.id));
+        const announcements=node("div"),editor=node("div");
+        const channels=await api("/api/store/channels?store="+encodeURIComponent(id));
+        const available=channels.channels.filter(c=>c.available);
+        const panelData=await api("/api/commerce/ticket-panels?store="+encodeURIComponent(id));
+        list.append(button("+ Criar anúncio de ticket",()=>openTicketEditor()),announcements,editor);
+        function openTicketEditor(existing=null){
+          editor.replaceChildren();
+          const form=panel(existing?"Editar anúncio":"Novo anúncio de tickets","Configure a mensagem e as opções de atendimento.");
+          const channel=select([["","Selecione o canal"],...available.map(c=>[c.id,"#"+c.name])]);
+          const title=input("Título do anúncio"),description=node("textarea");description.className="control-input";description.rows=4;description.placeholder="Mensagem que aparece no Discord";
+          const mode=select([["buttons","Botões"],["select","Tabelinha (menu suspenso)"]]),items=node("div");
+          title.value=existing?.title||"Central de atendimento";description.value=existing?.description||"Selecione uma opção para abrir seu ticket.";
+          if(existing){channel.value=existing.channel_id;channel.disabled=true;mode.value=existing.mode;}
+          const rows=[];
+          function addOption(data={label:"",color:"roxo",description:""}){
+            if(rows.length>=5){toast("Máximo de cinco opções.");return;}
+            const wrapper=node("div",undefined,"control-item"),label=input("Ex.: Suporte ou Receber produto"),color=select([["roxo","Roxo"],["cinza","Cinza"],["verde","Verde"],["vermelho","Vermelho"]]),desc=input("Descrição curta (opcional)");
+            label.value=data.label||"";color.value=data.color||"roxo";desc.value=data.description||"";
+            const row={wrapper,label,color,desc};rows.push(row);
+            wrapper.append(field("Nome do botão/opção",label),field("Cor do botão",color),field("Descrição",desc),button("Remover opção",()=>{rows.splice(rows.indexOf(row),1);wrapper.remove();},true));items.append(wrapper);
+          }
+          for(const option of existing?.options||[{label:"Suporte",color:"roxo"},{label:"Receber produto",color:"verde"}])addOption(option);
+          form.append(field("Canal de anúncio",channel),field("Título",title),field("Mensagem",description),field("Formato",mode),node("h3","Botões ou opções"),items,button("+ Adicionar opção",()=>addOption()),button(existing?"Salvar alterações no Discord":"Publicar anúncio no Discord",async()=>{
+            await api("/api/commerce/ticket-panels",{store_id:id,panel_id:existing?.id,channel_id:channel.value,title:title.value,description:description.value,mode:mode.value,options:rows.map(x=>({label:x.label.value,color:x.color.value,description:x.desc.value}))});
+            toast("Anúncio publicado no Discord.",true);await load();
+          }),button("Cancelar",()=>editor.replaceChildren()));
+          editor.append(form);
+        }
+        for(const p of panelData.panels)announcements.append(card(p.title,"Canal: "+(available.find(c=>c.id===p.channel_id)?.name||p.channel_id),"Formato: "+(p.mode==="buttons"?"Botões":"Tabelinha")),button("Editar anúncio",()=>openTicketEditor(p)));
+        if(!panelData.panels.length)announcements.append(node("p","Nenhum anúncio de ticket publicado."));
+        list.append(node("h3","Tickets abertos"));
+        for(const t of d.tickets)list.append(card(t.subject||"Ticket","Status: "+(labels[t.status]||t.status),"Data: "+formatDate(t.created_at),"Canal: "+t.channel_id));
         if(!d.tickets.length)list.append(node("p","Nenhum ticket registrado."));
-        list.append(node("p","A criação automática de tickets pelo Discord ainda não está disponível."));
+        list.append(node("p","As cores seguem as quatro opções permitidas pelo Discord. O bot precisa de Gerenciar Canais para criar tickets privados."));
       }
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
