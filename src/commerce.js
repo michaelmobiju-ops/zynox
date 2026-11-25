@@ -22,7 +22,7 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,name});
  }
  if(path==="/api/commerce/automations"&&request.method==="GET"){
-  const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
+  const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivering','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
   return json({delivery:{configured:Boolean(env.DISCORD_BOT_TOKEN&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:false},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
  }
  if(path==="/api/commerce/integrations"&&request.method==="GET"){
@@ -117,8 +117,8 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/overview"&&request.method==="GET"){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,o.paid_at,o.delivered_at,c.username,p.name AS product_name,v.name AS variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
-  const stats=await env.DB.prepare("SELECT count(*) AS orders,COALESCE(SUM(CASE WHEN status IN ('paid','delivered') THEN total_cents ELSE 0 END),0) AS sales_cents,COALESCE(SUM(CASE WHEN status IN ('paid','delivered') THEN 1 ELSE 0 END),0) AS paid,COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) AS pending,COALESCE(SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END),0) AS delivered FROM orders WHERE store_id=?").bind(store.id).first();
-  const customers=await list("SELECT c.discord_id,c.username,c.created_at,count(o.id) AS orders,COALESCE(SUM(CASE WHEN o.status IN ('paid','delivered') THEN o.total_cents ELSE 0 END),0) AS spent_cents FROM customers c LEFT JOIN orders o ON o.customer_id=c.id AND o.store_id=c.store_id WHERE c.store_id=? GROUP BY c.id ORDER BY c.created_at DESC LIMIT 100",store.id);
+  const stats=await env.DB.prepare("SELECT count(*) AS orders,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN total_cents ELSE 0 END),0) AS sales_cents,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN 1 ELSE 0 END),0) AS paid,COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) AS pending,COALESCE(SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END),0) AS delivered FROM orders WHERE store_id=?").bind(store.id).first();
+  const customers=await list("SELECT c.discord_id,c.username,c.created_at,count(o.id) AS orders,COALESCE(SUM(CASE WHEN o.status IN ('paid','delivering','delivered') THEN o.total_cents ELSE 0 END),0) AS spent_cents FROM customers c LEFT JOIN orders o ON o.customer_id=c.id AND o.store_id=c.store_id WHERE c.store_id=? GROUP BY c.id ORDER BY c.created_at DESC LIMIT 100",store.id);
   const customerCount=await env.DB.prepare("SELECT count(*) AS total FROM customers WHERE store_id=?").bind(store.id).first();
   return json({orders,stats:{...stats,customers:customerCount.total},customers,coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:[],gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id)});
  }
