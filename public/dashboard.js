@@ -1181,7 +1181,7 @@ function navigate(page) {
     head.append(node("span","✦ ZYNOX / GERENCIAMENTO","server-eyebrow"),node("h1","Seus servidores"),node("p","Selecione onde deseja gerenciar suas vendas, produtos e automações."));
     const actions=node("div",undefined,"server-entry-actions");
     const invite=node("a","+ Adicionar bot ao Discord","control-button");
-    invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
+    invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=85008&scope=bot%20applications.commands";
     invite.target="_blank";invite.rel="noopener noreferrer";
     const refresh=button("Atualizar",()=>load());actions.append(invite,refresh);
     const notice=node("p",undefined,"server-entry-notice"),list=node("div",undefined,"server-grid");
