@@ -831,6 +831,27 @@ function navigate(page) {
     return;
   }
 
+  if (page === "bot") {
+    const box = panel("Meu bot", "Integração com o Discord");
+    const invite = node("a","Adicionar bot ao servidor","control-button");
+    invite.href = "https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
+    invite.target = "_blank";
+    invite.rel = "noopener noreferrer";
+    box.append(invite);
+    if (isOwner()) {
+      const status = node("p","Verifique a conexão ou registre os comandos.");
+      box.append(status,button("Verificar conexão",async()=>{
+        const data = await api("/api/owner/discord/status");
+        status.textContent = "Conectado: "+data.bot.username;
+      }),button("Registrar comandos",async()=>{
+        const data = await api("/api/owner/discord/commands",{});
+        status.textContent = "Registrados: "+data.registered.map(name=>"/"+name).join(", ");
+      }));
+    }
+    main.append(box);
+    return;
+  }
+
   if (page === "account") {
     renderAccount();
     return;
