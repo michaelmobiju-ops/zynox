@@ -379,3 +379,5 @@ body.server-selection-mode #main-content{max-width:1020px;padding:clamp(30px,7vw
 .server-entry-footer .control-button{background:#211735;border:1px solid #49306b}
 body.server-selection-mode .topbar{border-bottom:1px solid #2e2440}
 @media(max-width:520px){body.server-selection-mode .topbar{padding:14px 16px}.server-entry-head{margin-bottom:24px}.server-card{padding:17px}.server-entry-actions .control-button{font-size:12px}.server-entry-footer .control-button{font-size:12px}}
+
+.server-avatar{position:relative;overflow:hidden;flex-shrink:0}.server-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
