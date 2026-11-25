@@ -964,12 +964,9 @@ function navigate(page) {
       premium:"✦ ZYNOX • VENDA APROVADA\n🛍️ Gerador de Sensi\n👤 @cliente\n💰 Receita bruta: R$ 20,00"
     };
     const presets=node("div",undefined,"zynox-notification-presets");
-    const templates=[
-      ["classic","🎉 Clássico","Venda aprovada","Produto • Cliente • Valor"],
-      ["compact","💜 Compacto","Nova compra","Resumo simples e discreto"],
-      ["premium","✦ Premium","ZYNOX • VENDA APROVADA","Destaque roxo e dourado"]
-    ];
-    const renderPresets=()=>{presets.replaceChildren();for(const [id,title,headline,description] of templates){const card=node("button",undefined,"zynox-notification-preset");card.type="button";card.dataset.style=id;card.setAttribute("aria-pressed",String(style.value===id));card.append(node("strong",title),node("span",headline),node("small",description));card.addEventListener("click",()=>{style.value=id;show();renderPresets();});presets.append(card);}};
+    const templates=[["classic","Clássico"],["compact","Compacto"],["premium","Premium"]];
+    const presetUrl=id=>"/notification-"+id+".svg";
+    const renderPresets=()=>{presets.replaceChildren();for(const [id,title] of templates){const card=node("button",undefined,"zynox-notification-preset");card.type="button";card.dataset.style=id;card.setAttribute("aria-pressed",String(imageUrl.value===presetUrl(id)));const picture=node("img");picture.src=presetUrl(id);picture.alt="Modelo visual "+title;picture.loading="lazy";card.append(picture,node("strong",title));card.addEventListener("click",()=>{style.value=id;imageUrl.value=presetUrl(id);show();renderPresets();});presets.append(card);}};
     const imageUrl=input("https://exemplo.com/imagem.gif","url");imageUrl.placeholder="Link direto da imagem ou GIF (HTTPS)";
     const imagePicker=input("","file");imagePicker.accept="image/png,image/jpeg,image/webp,image/gif";imagePicker.style.display="none";
     const uploadStatus=node("p","Envie uma imagem do celular ou informe o link direto.");
@@ -981,13 +978,13 @@ function navigate(page) {
       try{
         const response=await fetch("/api/media/sales?store="+encodeURIComponent(ZYNOX.store.id),{method:"POST",headers:{"Content-Type":file.type},body:file});
         const data=await response.json();if(!response.ok)throw Error(data.error||"Falha no envio.");
-        imageUrl.value=data.url;show();uploadStatus.textContent="Imagem enviada. Clique em Salvar notificações.";
+        imageUrl.value=data.url;show();renderPresets();uploadStatus.textContent="Imagem enviada. Clique em Salvar notificações.";
       }catch(e){uploadStatus.textContent=e.message;}
     });
     const imagePreview=node("img");imagePreview.alt="Prévia da imagem";imagePreview.style.cssText="display:none;max-width:100%;max-height:240px;object-fit:contain;border-radius:12px";
-    const show=()=>{preview.textContent=examples[style.value];const url=imageUrl.value.trim();imagePreview.style.display=/^https:\/\//i.test(url)?"block":"none";if(imagePreview.style.display==="block")imagePreview.src=url;};style.addEventListener("change",()=>{show();renderPresets();});imageUrl.addEventListener("input",show);show();renderPresets();preview.style.whiteSpace="pre-line";
-    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia do anúncio"),preview,imagePreview,button("Salvar notificações",async()=>{await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
-    Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name,c.id);o.disabled=!c.available;channel.append(o);}if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||"";show();renderPresets();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar as migrações 0007 e 0010 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
+    const show=()=>{preview.textContent=examples[style.value];const url=imageUrl.value.trim();imagePreview.style.display=/^(https:\/\/|\/notification-(classic|compact|premium)\.svg$)/i.test(url)?"block":"none";if(imagePreview.style.display==="block")imagePreview.src=url;};style.addEventListener("change",()=>{show();renderPresets();});imageUrl.addEventListener("input",()=>{show();renderPresets();});imageUrl.value=presetUrl(style.value);show();renderPresets();preview.style.whiteSpace="pre-line";
+    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,button("Salvar notificações",async()=>{await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
+    Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name,c.id);o.disabled=!c.available;channel.append(o);}if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||presetUrl(style.value);show();renderPresets();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar as migrações 0007 e 0010 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
       const [d,m]=await Promise.all([api("/api/commerce/overview?store="+encodeURIComponent(id)),api("/api/commerce/manual-pix?store="+encodeURIComponent(id))]);
