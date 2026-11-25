@@ -263,9 +263,11 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/wallet"||path.startsWith("/api/commerce/wallet/"))return fail("EM BREVE !",503);
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
-  const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount);
-  if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100)return fail("Cupom inválido.");
-  const result=await env.DB.prepare("INSERT INTO coupons(id,store_id,code,discount) VALUES(?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,code,discount).run();
+  const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount),productId=String(body.product_id||"");
+  if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100||!productId)return fail("Selecione um produto e informe um cupom válido.");
+  const product=await env.DB.prepare("SELECT id FROM products WHERE id=? AND store_id=? AND status!=\'archived\'").bind(productId,store.id).first();
+  if(!product)return fail("Produto não encontrado nesta loja.",404);
+  let result;try{result=await env.DB.prepare("INSERT INTO coupons(id,store_id,product_id,code,discount) VALUES(?,?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,productId,code,discount).run();}catch(error){if(String(error).includes("product_id"))return fail("Aplique a migração 0008 no banco D1.",503);throw error;}
   return result.meta.changes?json({success:true}):fail("Cupom já existe.",409);
  }
  return fail("Funcionalidade indisponível.",404);
