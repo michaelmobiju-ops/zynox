@@ -684,6 +684,12 @@ async function controlAdmins(container) {
       )
     );
 
+    card.append(button("Excluir cadastro",async()=>{
+      if(!await confirmInApp("Excluir definitivamente o cadastro de "+admin.username+"? As sessões serão encerradas."))return;
+      await api("/api/control/admins/delete",{id:admin.id});
+      toast("Administrador excluído.",true);
+      await renderControl("admins");
+    },true));
     list.appendChild(card);
   });
 
