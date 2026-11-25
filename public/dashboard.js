@@ -800,6 +800,42 @@ async function renderControl(tab = "stats") {
 
 // NAVEGAÇÃO PRINCIPAL
 
+async function loadHomeDashboard() {
+  const main=element("main-content");
+  const selector=element("dashboard-store");
+  const status=element("dashboard-status");
+  if(!selector||!status)return;
+  const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
+  let serial=0;
+  async function refresh(){
+    const current=++serial;
+    status.textContent="Atualizando indicadores...";
+    try{
+      const d=await api("/api/dashboard/summary?store="+encodeURIComponent(selector.value));
+      if(current!==serial||!main.contains(selector))return;
+      if(selector.options.length===1){for(const s of d.stores)selector.append(new Option(s.name,s.id));}
+      const m=d.metrics;
+      element("total-revenue").textContent=money(m.revenue_cents);
+      element("total-sales").textContent=String(m.sales);
+      element("total-products").textContent=String(m.products);
+      element("total-customers").textContent=String(m.customers);
+      status.textContent=d.stores.length?"Indicadores atualizados.":"Vincule uma loja em Servidores para começar.";
+      const chart=element("sales-chart");chart.replaceChildren();
+      const days=new Map(d.days.map(x=>[x.day,x]));
+      const series=Array.from({length:7},(_,i)=>{const date=new Date();date.setUTCDate(date.getUTCDate()-6+i);const day=date.toISOString().slice(0,10);return {day,cents:Number(days.get(day)?.cents||0)};});
+      const max=Math.max(1,...series.map(x=>x.cents));
+      for(const item of series){const row=node("div",undefined,"home-chart-row"),label=node("span",item.day.slice(8)+"/"+item.day.slice(5,7)),track=node("div",undefined,"home-chart-track"),bar=node("div",undefined,"home-chart-bar"),value=node("span",money(item.cents));bar.style.width=(100*item.cents/max)+"%";track.append(bar);row.append(label,track,value);chart.append(row);}
+      const recent=element("recent-activities");recent.replaceChildren();
+      const labels={pending:"Pendente",paid:"Pago",delivered:"Entregue",cancelled:"Cancelado",expired:"Expirado"};
+      for(const o of d.recent){const c=node("div",undefined,"control-item");c.append(node("strong",o.product_name+" · "+money(o.total_cents)),node("p",o.store_name+" · "+(labels[o.status]||o.status)+" · "+formatDate(o.created_at)));recent.append(c);}
+      if(!d.recent.length)recent.append(node("p","Nenhum pedido registrado."));
+    }catch(e){if(current===serial&&main.contains(selector))status.textContent=e.message;}
+  }
+  selector.addEventListener("change",refresh);
+  element("dashboard-refresh")?.addEventListener("click",refresh);
+  await refresh();
+}
+
 function navigate(page) {
   if (!pageNames[page]) return;
 
@@ -823,6 +859,7 @@ function navigate(page) {
   if (page === "home" || page === "dashboard") {
     main.innerHTML = homeContent;
     updateProfile();
+    loadHomeDashboard();
     return;
   }
 
@@ -1153,6 +1190,7 @@ async function initialize() {
     if (element("app")) {
       element("app").hidden = false;
     }
+    loadHomeDashboard();
 
   } catch (error) {
     const loading = element("loading");
