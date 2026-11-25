@@ -1,0 +1,25 @@
+name: ZYNOX CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          set -eu
+          find src -type f -name '*.js' -print0 | while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            node --check "$file"
+          done
+      - name: Validate package manifest
+        run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
