@@ -136,6 +136,13 @@ export async function commerce(request,env,storeChannels){
   await env.DB.prepare("INSERT INTO gateways(id,store_id,provider,credentials_encrypted,is_primary,status) VALUES(?,?,?,?,1,'connected') ON CONFLICT(id) DO UPDATE SET credentials_encrypted=excluded.credentials_encrypted,is_primary=1,status='connected'").bind(id,store.id,provider,encrypted).run();
   return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
  }
+ if(path==="/api/commerce/wallet/settings"&&request.method==="GET")return json({enabled:Boolean(store.wallet_enabled),mode:"ledger_only"});
+ if(path==="/api/commerce/wallet/settings"&&request.method==="POST"){
+  const enabled=body.enabled===true?1:body.enabled===false?0:null;
+  if(enabled===null)return fail("Escolha se deseja ativar ou desativar a carteira.");
+  await env.DB.prepare("UPDATE stores SET wallet_enabled=? WHERE id=? AND owner_id=?").bind(enabled,store.id,user.id).run();
+  return json({success:true,enabled:Boolean(enabled),mode:"ledger_only"});
+ }
  if(path==="/api/commerce/wallet/withdrawals/transfer"&&request.method==="POST"){
   if(env.ENABLE_SANDBOX_PAYOUTS!=="true")return fail("Saques desativados até a homologação.",503);
   const amount=Number(body.amount_cents),pixKey=String(body.pix_key||"").trim(),keyType=String(body.pix_key_type||"");
