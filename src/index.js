@@ -1,4 +1,5 @@
 import {cart} from "./cart.js";
+import {paymentWebhook} from "./payment-webhook.js";
 import {commerce} from "./commerce.js";
 import {
   discordLogin,
@@ -127,6 +128,8 @@ export default {
     const path = url.pathname;
 
     try {
+
+      if (path === "/webhooks/payments") return await paymentWebhook(request,env);
 
       if (path === "/auth/discord/link" || path === "/auth/discord/link/callback") {
         return await handleDiscordLink(request, env);
