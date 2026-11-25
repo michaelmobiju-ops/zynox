@@ -329,3 +329,23 @@ textarea.control-input {
 .home-chart-bar{height:100%;background:linear-gradient(90deg,#7135FF,#C084FC);border-radius:6px;}
 .metric strong,.control-stat h2{overflow-wrap:anywhere;}
 @media(max-width:600px){.home-chart-row{grid-template-columns:36px minmax(0,1fr) minmax(75px,auto);gap:6px;font-size:11px;}.metric strong{font-size:clamp(16px,4.6vw,25px);}.control-stat h2{font-size:clamp(17px,4.6vw,28px);}}
+
+/* Compact product editor and responsive revenue chart */
+.product-editor{padding:14px;max-width:760px;margin-inline:auto;}
+.product-editor .control-field{gap:5px;margin:8px 0;}
+.product-editor .control-input{padding:9px 11px;}
+.product-editor input[type=color]{height:36px;padding:4px;max-width:90px;}
+.product-editor textarea.control-input{min-height:65px;margin:4px 0;font-family:inherit;}
+.product-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;}
+.product-fields>.control-field:last-child{grid-column:1/-1;}
+.product-section{margin:8px 0;padding:10px;border:1px solid #332B45;border-radius:10px;}
+.product-section summary{cursor:pointer;font-weight:700;color:#DAD5E5;font-size:14px;}
+.product-editor .compact-variant{padding:10px;margin:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:0 8px;}
+.compact-variant>p,.compact-variant>label:has(textarea),.compact-variant>button{grid-column:1/-1;}
+.product-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.product-editor .control-button{width:auto;padding:9px 12px;margin:6px 0;}
+.sales-line-chart{display:block;width:100%;height:auto;max-height:290px;}
+.sales-line-chart circle{cursor:pointer;}
+.sales-line-chart circle:focus{outline:none;stroke:white;stroke-width:3;}
+.chart-detail{color:#A19BAD;font-size:12px;text-align:center;margin:0;}
+@media(max-width:480px){.product-editor{padding:10px;}.product-fields,.product-editor .compact-variant{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.product-editor .control-input{min-width:0;width:100%;}.product-editor .control-field span{font-size:11px;}}
