@@ -420,6 +420,32 @@ export default {
         return json({error:"Método não permitido."},405);
       }
 
+      if (path === "/api/support") {
+        const user=await getSession(request,env);
+        if(!user)return json({error:"Autenticação necessária."},401);
+        if(request.method==="GET"){
+          const items=(await env.DB.prepare("SELECT id,subject,message,status,created_at FROM support_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(user.id).all()).results;
+          return json({items});
+        }
+        if(request.method==="POST"){
+          if(request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+          let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
+          const subject=typeof body?.subject==="string"?body.subject.trim():"",message=typeof body?.message==="string"?body.message.trim():"";
+          if(!subject||subject.length>120||message.length<10||message.length>3000)return json({error:"Informe assunto e descrição (10 a 3000 caracteres)."},400);
+          const id=crypto.randomUUID();
+          const result=await env.DB.prepare("INSERT INTO support_requests(id,user_id,subject,message) SELECT ?,?,?,? WHERE (SELECT count(*) FROM support_requests WHERE user_id=? AND status='open')<5").bind(id,user.id,subject,message,user.id).run();
+          if(!result.meta.changes)return json({error:"Limite de cinco chamados abertos."},409);
+          return json({success:true,id},201);
+        }
+        return json({error:"Método não permitido."},405);
+      }
+      if(path==="/api/ai/status"){
+        if(request.method!=="GET")return json({error:"Método não permitido."},405);
+        const user=await getSession(request,env);
+        if(!user)return json({error:"Autenticação necessária."},401);
+        return json({available:false,message:"A integração de inteligência artificial ainda não foi habilitada."});
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
