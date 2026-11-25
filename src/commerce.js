@@ -1,3 +1,4 @@
+import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
 import {deliver} from "./payment-webhook.js";
 import {getSession} from "./auth.js";
@@ -20,6 +21,21 @@ export async function commerce(request,env,storeChannels){
   if(!name||name.length>100)return fail("Informe um nome de loja com até 100 caracteres.");
   await env.DB.prepare("UPDATE stores SET name=? WHERE id=? AND owner_id=?").bind(name,store.id,user.id).run();
   return json({success:true,name});
+ }
+ if(path==="/api/commerce/sale-notifications"&&request.method==="GET"){
+   let settings=null;
+   try{settings=await env.DB.prepare("SELECT channel_id,template,enabled FROM sale_notifications WHERE store_id=?").bind(store.id).first();}
+   catch(error){if(!String(error).includes("sale_notifications"))throw error;}
+   return json({settings,migration_needed:settings===null&&!(await (async()=>{try{await env.DB.prepare("SELECT 1 FROM sale_notifications LIMIT 1").first();return true;}catch{return false;}})())});
+ }
+ if(path==="/api/commerce/sale-notifications"&&request.method==="POST"){
+   const channel=String(body.channel_id||""),template=String(body.template||"classic");
+   if(!/^\\d{17,20}$/.test(channel)||!["classic","compact","premium"].includes(template))return fail("Canal ou modelo inválido.");
+   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
+   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===channel&&c.available))return fail("O bot não pode publicar neste canal.",403);
+   try{await env.DB.prepare("INSERT INTO sale_notifications(store_id,channel_id,template,enabled) VALUES(?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET channel_id=excluded.channel_id,template=excluded.template,enabled=1").bind(store.id,channel,template).run();}
+   catch(error){if(String(error).includes("sale_notifications"))return fail("Atualize o banco D1 com a migração 0007.",503);throw error;}
+   return json({success:true});
  }
  if(path==="/api/commerce/automations"&&request.method==="GET"){
   const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivering','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
@@ -169,6 +185,7 @@ export async function commerce(request,env,storeChannels){
    env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
   ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
   if(!result[0].meta.changes)return fail("Pedido já processado.",409);
+  try{await announceSale(env,id);}catch{}
   let delivery="pending";try{delivery=await deliver(env,id);}catch{}
   return json({success:true,status:delivery==="delivered"?"delivered":"paid",delivery});
  }
