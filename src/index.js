@@ -1,3 +1,4 @@
+import {ticketInteraction} from "./ticket-panels.js";
 import {cart} from "./cart.js";
 import {paymentWebhook} from "./payment-webhook.js";
 import {commerce} from "./commerce.js";
@@ -155,7 +156,7 @@ export default {
           const paused=await env.DB.prepare("SELECT c.enabled FROM server_controls c JOIN stores s ON s.id=c.store_id WHERE s.guild_id=?").bind(interaction.guild_id).first();
           if(paused&&paused.enabled===0)return json({type:4,data:{content:"ZYNOX está pausado neste servidor.",flags:64}});
         }
-        if (interaction.type === 3) { const result = await cart(interaction,env); if(result) return json(result); }
+        if (interaction.type === 3) { const ticket=await ticketInteraction(interaction,env);if(ticket)return json(ticket);const result = await cart(interaction,env); if(result) return json(result); }
         const replies = {
           ping: "🏓 Pong! ZYNOX está respondendo.",
           zynox: "ZYNOX — plataforma de automação de vendas para Discord.",
