@@ -9,7 +9,7 @@ export async function cart(interaction,env){
  const p=await env.DB.prepare("SELECT p.*,s.guild_id FROM products p JOIN stores s ON s.id=p.store_id WHERE p.id=? AND p.status='active'").bind(productId).first();
  if(!p||p.guild_id!==interaction.guild_id||p.channel_id!==interaction.channel_id||(action==="buy:"&&p.message_id!==interaction.message?.id))return reply("Produto indisponível.");
  await env.DB.batch([
-  env.DB.prepare("UPDATE orders SET status='expired' WHERE store_id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id) AND datetime(created_at,'+10 minutes')<=datetime('now')").bind(p.store_id),
+  env.DB.prepare("UPDATE orders SET status='expired' WHERE store_id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id) AND NOT EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=orders.id AND status IN ('pending','confirmed')) AND datetime(created_at,'+10 minutes')<=datetime('now')").bind(p.store_id),
   env.DB.prepare("UPDATE stock SET status='available',reserved_until=NULL WHERE status='reserved' AND reserved_until<=datetime('now') AND variant_id IN (SELECT id FROM variants WHERE product_id=?) AND NOT EXISTS(SELECT 1 FROM order_stock os JOIN orders o ON o.id=os.order_id WHERE os.stock_id=stock.id AND o.status IN ('pending','paid'))").bind(productId)
  ]);
  const variants=(await env.DB.prepare("SELECT v.*,(SELECT count(*) FROM stock WHERE variant_id=v.id AND status='available') AS available FROM variants v WHERE product_id=?").bind(productId).all()).results;
@@ -31,6 +31,16 @@ export async function cart(interaction,env){
   ]);
   const order=await db.prepare("SELECT o.id,o.total_cents FROM orders o JOIN order_stock os ON os.order_id=o.id JOIN variants v ON v.id=o.variant_id JOIN stock st ON st.id=os.stock_id AND ((v.infinite_stock=0 AND st.status='reserved' AND st.reserved_until>datetime('now')) OR (v.infinite_stock=1 AND st.status='available')) WHERE o.id=? AND o.customer_id=? AND o.status='pending'").bind(orderId,customer.id).first();
   if(!order)return reply("Estoque indisponível ou pedido expirado.");
+  const pix=await db.prepare("SELECT bank,key_type,pix_key,recipient FROM manual_pix_settings WHERE store_id=? AND enabled=1").bind(p.store_id).first();
+  if(pix){
+   await db.batch([
+    db.prepare("INSERT OR IGNORE INTO manual_pix_orders(order_id,store_id,amount_cents) SELECT id,store_id,total_cents FROM orders WHERE id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id)").bind(orderId),
+    db.prepare("UPDATE stock SET reserved_until=datetime('now','+24 hours') WHERE status='reserved' AND id IN (SELECT stock_id FROM order_stock WHERE order_id=?) AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='pending')").bind(orderId,orderId)
+   ]);
+   const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
+   if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
+   return reply("Pix manual — "+p.name+" / "+v.name+"\nValor: R$ "+(order.total_cents/100).toFixed(2)+"\nTitular: "+pix.recipient+"\nTipo: "+pix.key_type+"\nChave Pix: "+pix.pix_key+"\nPedido: "+orderId+"\nConfira o titular no aplicativo do banco. A entrega depende da confirmação do vendedor no extrato.");
+  }
   return reply("Reserva criada por 10 minutos.\n"+p.name+" — "+v.name+"\nTotal: R$ "+(v.price_cents/100).toFixed(2)+"\nPedido: "+orderId+"\nPix ainda não configurado.");
  }
  if(action==="choose:"){
