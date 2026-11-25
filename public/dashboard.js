@@ -919,18 +919,30 @@ function navigate(page) {
   }
 
   if (page === "payments") {
-    const box=panel("Pagamentos Pix","Gere cobranças para pedidos pendentes usando o provedor conectado.");
+    const box=panel("Pagamentos Pix","Receba diretamente na sua conta. O Pix manual exige conferência no extrato bancário.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
     box.append(field("Loja",stores),status,list);main.append(box);
-    async function load(){const id=stores.value;list.replaceChildren();if(!id)return;const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));if(!d.orders.length)list.append(node("p","Nenhum pedido registrado."));
-      for(const order of d.orders){const card=node("div",undefined,"control-item");card.append(node("strong","Pedido "+order.id),node("p","Status: "+order.status+" • R$ "+(order.total_cents/100).toFixed(2).replace(".",",")));
-        if(order.status==="pending"){const name=input("Nome do comprador"),email=input("E-mail do comprador","email"),result=node("div");card.append(field("Nome",name),field("E-mail",email),button("Gerar Pix",async()=>{const p=await api("/api/commerce/pix",{store_id:id,order_id:order.id,buyer_name:name.value,buyer_email:email.value});result.replaceChildren(node("p","Pix copia e cola:"),node("textarea",p.payment.pix_code,"control-input"),button("Copiar Pix",()=>navigator.clipboard.writeText(p.payment.pix_code)),node("p","Validade: "+(p.payment.expires_at||"conforme provedor")));}));card.append(result);}
-        list.append(card);
-      }
+    async function load(){
+      const id=stores.value;list.replaceChildren();if(!id)return;
+      const [d,m]=await Promise.all([api("/api/commerce/overview?store="+encodeURIComponent(id)),api("/api/commerce/manual-pix?store="+encodeURIComponent(id))]);
+      if(stores.value!==id)return;
+      list.append(node("h3","Pix manual"),node("p",m.settings?.enabled?"Ativo — recebimento direto no banco cadastrado.":"Desativado."),button("Configurar chave Pix",()=>navigate("gateways")),node("h3","Pedidos Pix manual"));
+      for(const o of m.orders){
+        const card=node("div",undefined,"control-item");
+        card.append(node("strong","Pedido "+o.order_id),node("p","R$ "+(o.amount_cents/100).toFixed(2).replace(".",",")),node("p",o.status==="confirmed"?"Confirmado pelo vendedor":o.status==="pending"?"Aguardando conferência bancária":"Cancelado"));
+        if(o.status==="pending"&&o.order_status==="pending"){
+          const ref=input("ID da transação Pix (EndToEndId)"),verified=input("","checkbox");ref.maxLength=32;
+          card.append(field("ID da transação no extrato",ref),field("Conferi o crédito e o valor na minha conta bancária",verified),button("Confirmar recebimento",async()=>{if(!verified.checked)throw Error("Confira o extrato primeiro.");if(!confirm("Confirma que o valor foi recebido na sua conta?"))return;await api("/api/commerce/manual-pix/confirm",{store_id:id,order_id:o.order_id,bank_reference:ref.value,verified:true});await load();}));
+        }list.append(card);
+      }if(!m.orders.length)list.append(node("p","Nenhum pedido manual."));
+      list.append(node("h3","Cobranças automáticas — ambiente de testes"));
+      for(const o of d.orders.filter(o=>!m.orders.some(mo=>mo.order_id===o.id))){
+        const card=node("div",undefined,"control-item");card.append(node("strong","Pedido "+o.id),node("p",o.status+" • R$ "+(o.total_cents/100).toFixed(2).replace(".",",")));
+        if(o.status==="pending"){const name=input("Nome do comprador"),email=input("E-mail do comprador","email"),result=node("div");card.append(field("Nome",name),field("E-mail",email),button("Gerar Pix de teste",async()=>{const p=await api("/api/commerce/pix",{store_id:id,order_id:o.id,buyer_name:name.value,buyer_email:email.value});result.replaceChildren(node("p","Pix copia e cola:"),node("textarea",p.payment.pix_code,"control-input"),button("Copiar Pix",()=>navigator.clipboard.writeText(p.payment.pix_code)));}),result);}list.append(card);
+      }status.textContent="Pedidos atualizados.";
     }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
-    return;
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);return;
   }
 
   if (page === "wallet") {
@@ -948,6 +960,12 @@ function navigate(page) {
     box.append(field("Loja",stores),status,content);main.append(box);
     async function load(){
       const id=stores.value;content.replaceChildren();if(!id)return;
+        const m=await api("/api/commerce/manual-pix?store="+encodeURIComponent(id));if(stores.value!==id)return;
+        const bank=select([["nubank","Nubank"],["picpay","PicPay"],["itau","Itaú"],["other","Outro banco"]]),type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
+        if(m.settings){bank.value=m.settings.bank;type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
+        content.append(node("h3","Pix manual — "+(m.settings?.enabled?"Ativo":"Desativado")),field("Banco",bank),field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar e ativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:id,bank:bank.value,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});await load();}));
+        if(m.settings?.enabled)content.append(button("Desativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:id,enabled:false});await load();}));
+        content.append(node("h3","Integrações automáticas"),node("p","Nubank — disponível por Pix manual. PicPay e Itaú — integração API em desenvolvimento, exige habilitação comercial."));
         const provider=select([["mercadopago","Mercado Pago"],["asaas","Asaas — produção"],["asaas_sandbox","Asaas — sandbox"]]),token=input("Cole o token de API","password");
         content.append(field("Provedor",provider),field("Token de API",token),button("Validar e conectar",async()=>{status.textContent="Validando credencial...";const d=await api("/api/commerce/gateways",{store_id:id,provider:provider.value,api_token:token.value});token.value="";status.textContent="Conectado: "+d.gateway.account;await load();}));
         const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));
