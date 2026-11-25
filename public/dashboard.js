@@ -868,53 +868,55 @@ function navigate(page) {
     return;
   }
 
-  if (page === "stock") {
-    const box=panel("Estoque","Cadastre keys separadamente para cada produto ou variação.");
-    const stores=select([["","Selecione a loja"]]),list=node("div"),status=node("p","Carregando lojas...");
-    box.append(field("Loja",stores),status,list);main.append(box);
-    async function load(){const id=stores.value;list.replaceChildren();if(!id)return;const d=await api("/api/commerce/products?store="+encodeURIComponent(id));if(stores.value!==id)return;
-      for(const p of d.products){const card=node("div",undefined,"control-item");card.append(node("h3",p.name));for(const v of d.variants.filter(v=>v.product_id===p.id)){const keys=node("textarea",undefined,"control-input");keys.placeholder="Uma key por linha (até 50)";const result=node("p","Disponíveis: "+v.available);card.append(node("h4",v.name),result,button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});await load();}),field("Novas keys",keys),button("Adicionar ao estoque",async()=>{const x=await api("/api/commerce/stock",{store_id:id,variant_id:v.id,keys:keys.value});keys.value="";result.textContent="Adicionadas: "+x.added;await load();}));}list.append(card);}if(!d.products.length)list.append(node("p","Cadastre um produto primeiro."));}
+  if (page === "products" || page === "stock") {
+    const box=panel("Produtos","Crie, edite e gerencie o estoque de cada produto em um só lugar.");
+    const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),listing=node("div"),editor=node("div");
+    let data={products:[],variants:[]},generation=0;
+    const add=button("+ Adicionar produto",()=>openEditor(null));add.disabled=true;
+    box.append(field("Loja",stores),add,status,editor,listing);main.append(box);
+    async function load(){
+      const id=stores.value,version=++generation;listing.replaceChildren();editor.replaceChildren();add.disabled=!id;
+      if(!id){status.textContent="Selecione a loja.";return;}
+      status.textContent="Carregando produtos...";
+      const d=await api("/api/commerce/products?store="+encodeURIComponent(id));if(version!==generation)return;
+      data=d;status.textContent=d.products.length+" produto(s) cadastrado(s).";
+      for(const p of d.products){
+        const card=node("div",undefined,"control-item");card.style.borderLeft="4px solid "+p.color;
+        if(p.image_url){const img=node("img");img.src=p.image_url;img.alt="Imagem do produto";img.loading="lazy";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-width:220px;max-height:120px;object-fit:contain;border-radius:8px;";card.append(img);}
+        card.append(node("h3",p.name),node("p",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status));
+        for(const v of d.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2).replace(".",",")+" • Estoque: "+(v.infinite_stock?"Infinito":v.available)));
+        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}));listing.append(card);
+      }if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
+    }
+    async function openEditor(product){
+      const id=stores.value;if(!id)return;
+      editor.replaceChildren();const form=node("div",undefined,"control-item");
+      editor.append(form);form.append(node("h3",product?"Editar produto":"Adicionar produto"));
+      const name=input("Nome do produto"),description=node("textarea",undefined,"control-input"),image=input("https://..."),color=input("","color"),label=input("Comprar"),multiple=input("","checkbox"),channels=select([["","Selecione o canal"]]),rows=node("div"),preview=node("div",undefined,"control-item");
+      name.value=product?.name||"";description.value=product?.description||"";image.value=product?.image_url||"";color.value=product?.color||"#7135FF";label.value=product?.button_text||"Comprar";multiple.checked=Boolean(product?.has_variations);channels.disabled=true;
+      function renderPreview(){preview.replaceChildren(node("h3",name.value||"Nome do produto"),node("p",description.value||"Descrição"),node("p",label.value||"Comprar"));preview.style.borderLeft="4px solid "+color.value;if(/^https:\/\//i.test(image.value)){const img=node("img");img.src=image.value;img.alt="Prévia da imagem";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-height:180px;object-fit:contain";preview.append(img);}}
+      for(const e of [name,description,image,color,label])e.addEventListener("input",renderPreview);renderPreview();
+      const variants=[];
+      function addVariant(v){
+        const n=input("Nome da variação"),price=input("Preço em reais","number"),keys=node("textarea",undefined,"control-input"),infinite=input("","checkbox"),row=node("div",undefined,"control-item");
+        n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
+        const entry={id:v?.id,n,price,keys,infinite,row};variants.push(entry);
+        row.append(field("Nome da variação",n),field("Preço",price),node("p","Estoque disponível: "+(v?.infinite_stock?"Infinito":v?.available||0)),field("Adicionar keys",keys),field("Estoque infinito",infinite));
+        if(v)row.append(button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{if(variants.some(x=>x.keys.value.trim()))throw Error("Salve as novas keys antes de alterar o modo.");await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});await load();const updated=data.products.find(x=>x.id===product.id);if(updated)await openEditor(updated);}));
+        else row.append(button("Remover variação",()=>{if(variants.length>1){variants.splice(variants.indexOf(entry),1);row.remove();}}));
+        rows.append(row);
+      }
+      const previous=data.variants.filter(v=>v.product_id===product?.id);if(previous.length)previous.forEach(addVariant);else addVariant(null);
+      const addRow=button("+ Adicionar variação",()=>{if(variants.length<25)addVariant(null);});addRow.hidden=!multiple.checked;
+      multiple.addEventListener("change",()=>{if(!multiple.checked&&variants.length>1){multiple.checked=true;alert("Remova as novas variações primeiro. As existentes são preservadas.");}addRow.hidden=!multiple.checked;});
+      const save=button("Salvar produto",async()=>{if(!channels.value)throw Error("Selecione o canal.");await api("/api/commerce/products",{store_id:id,product_id:product?.id,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({id:v.id,name:v.n.value,price_cents:Math.round(Number(v.price.value)*100),keys:v.keys.value,infinite:v.infinite.checked}))});await load();status.textContent="Produto e estoque salvos. Publique ou atualize o anúncio quando desejar.";});
+      form.append(field("Nome",name),field("Descrição",description),field("Imagem (link HTTPS)",image),field("Cor da barra lateral",color),field("Texto do botão",label),field("Canal de vendas",channels),node("h3","Prévia do anúncio"),preview,field("Usar variações",multiple),node("h3","Preço e estoque"),rows,addRow,save,button("Cancelar",()=>editor.replaceChildren()));
+      form.scrollIntoView({behavior:"smooth",block:"start"});
+      const result=await api("/api/store/channels?store="+encodeURIComponent(id));if(!editor.contains(form)||stores.value!==id)return;
+      for(const c of result.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}channels.value=product?.channel_id||"";channels.disabled=Boolean(product?.message_id);
+    }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
-    return;
-  }
-
-  if (page === "products") {
-    const box = panel("Produtos","Selecione a loja e o canal para preparar a publicação de produtos.");
-    const stores = select([["","Selecione a loja"]]);
-    const channels = select([["","Selecione o canal"]]);
-    const status = node("p","Carregando lojas...");
-    channels.disabled = true;
-    box.append(field("Loja",stores),field("Canal de vendas",channels),status);
-    main.append(box);
-    api("/api/store/channels").then(data=>{
-      for(const s of data.stores){const o=node("option",s.name);o.value=s.id;stores.append(o);}
-      status.textContent=data.stores.length?"Selecione uma loja.":"Vincule uma loja em Servidores primeiro.";
-    }).catch(e=>status.textContent=e.message);
-    stores.addEventListener("change",async()=>{
-      const id=stores.value;
-      channels.replaceChildren(new Option("Selecione o canal",""));
-      channels.disabled=true;
-      if(!id)return;
-      status.textContent="Consultando canais...";
-      try{
-        const data=await api("/api/store/channels?store="+encodeURIComponent(id));
-        if(stores.value!==id)return;
-        for(const c of data.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}
-        channels.disabled=false;
-        status.textContent="Escolha um canal disponível.";
-      }catch(e){status.textContent=e.message;}
-    });
-    const name=input("Nome do produto"),description=node("textarea",undefined,"control-input"),image=input("https://..."),color=input("#7135FF"),label=input("Comprar"),multiple=input("","checkbox"),rows=node("div"),listing=node("div");
-    color.value="#7135FF";label.value="Comprar";
-    const variants=[];
-    function addVariant(){const n=input("Nome da variação"),p=input("Preço em reais","number"),row=node("div",undefined,"control-item");p.min="0.01";p.step="0.01";n.value=variants.length?"":"Padrão";const v={n,p,row};variants.push(v);row.append(field("Variação",n),field("Preço",p),button("Remover",()=>{if(variants.length>1){variants.splice(variants.indexOf(v),1);row.remove();}}));rows.append(row);}
-    addVariant();
-    const add=button("Adicionar variação",()=>{if(variants.length<25)addVariant();});add.hidden=true;
-    multiple.addEventListener("change",()=>{add.hidden=!multiple.checked;if(!multiple.checked){while(variants.length>1)variants.pop().row.remove();}});
-    async function loadProducts(){const id=stores.value;listing.replaceChildren();if(!id)return;const data=await api("/api/commerce/products?store="+encodeURIComponent(id));if(stores.value!==id)return;for(const p of data.products){const card=node("div",undefined,"control-item");card.append(node("h3",p.name),node("p","Status: "+p.status));card.append(button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await loadProducts();}));for(const v of data.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2)+" | Estoque: "+v.available));listing.append(card);}}
-    stores.addEventListener("change",()=>loadProducts().catch(e=>status.textContent=e.message));
-    box.append(field("Nome",name),field("Descrição",description),field("Imagem HTTPS",image),field("Cor",color),field("Texto do botão",label),field("Usar variações",multiple),rows,add,button("Salvar produto",async()=>{if(!stores.value||!channels.value)throw Error("Selecione loja e canal.");await api("/api/commerce/products",{store_id:stores.value,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({name:v.n.value,price_cents:Math.round(Number(v.p.value)*100)}))});status.textContent="Produto salvo como rascunho.";await loadProducts();}),node("h3","Produtos cadastrados"),listing);
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";if(d.stores.length===1){stores.value=d.stores[0].id;return load();}}).catch(e=>status.textContent=e.message);
     return;
   }
 
