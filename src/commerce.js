@@ -134,6 +134,16 @@ export async function commerce(request,env,storeChannels){
   await env.DB.prepare("INSERT INTO gateways(id,store_id,provider,credentials_encrypted,is_primary,status) VALUES(?,?,?,?,1,'connected') ON CONFLICT(id) DO UPDATE SET credentials_encrypted=excluded.credentials_encrypted,is_primary=1,status='connected'").bind(id,store.id,provider,encrypted).run();
   return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
  }
+ if(path==="/api/commerce/wallet/withdrawals"&&request.method==="POST"){
+  const amount=Number(body.amount_cents);
+  if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Informe um saque entre R$ 10,00 e R$ 1.000.000,00.");
+  const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS amount FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
+  const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
+  if(balance.amount-pending.amount<amount)return fail("Saldo disponível insuficiente.",409);
+  const id=crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) VALUES(?,?,'withdrawal',?,?,'pending','Solicitação de saque — aguardando processamento manual')").bind(id,store.id,amount,"withdrawal:"+id).run();
+  return json({success:true,withdrawal:{id,amount_cents:amount,status:"pending"}},201);
+ }
  if(path==="/api/commerce/wallet"&&request.method==="GET"){
   const rows=await list("SELECT id,type,amount_cents,status,description,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id);
   const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS balance FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
