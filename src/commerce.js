@@ -12,6 +12,21 @@ export async function commerce(request,env,storeChannels){
  if(!store)return fail("Loja não encontrada.",404);
  const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
+ if(path==="/api/commerce/settings"&&request.method==="GET")return json({store:{id:store.id,name:store.name,guild_id:store.guild_id}});
+ if(path==="/api/commerce/settings"&&request.method==="POST"){
+  const name=typeof body.name==="string"?body.name.trim():"";
+  if(!name||name.length>100)return fail("Informe um nome de loja com até 100 caracteres.");
+  await env.DB.prepare("UPDATE stores SET name=? WHERE id=? AND owner_id=?").bind(name,store.id,user.id).run();
+  return json({success:true,name});
+ }
+ if(path==="/api/commerce/automations"&&request.method==="GET"){
+  const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
+  return json({delivery:{configured:Boolean(env.DISCORD_BOT_TOKEN&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:false},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
+ }
+ if(path==="/api/commerce/integrations"&&request.method==="GET"){
+  const gateways=await list("SELECT provider,status,is_primary FROM gateways WHERE store_id=?",store.id);
+  return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(env.DISCORD_BOT_TOKEN)},gateways,features:{wallet:false,ai:false,real_payments:false}});
+ }
  if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
  if(path==="/api/commerce/products"&&request.method==="POST"){
   const name=String(body.name||"").trim(),description=String(body.description||""),image=String(body.image_url||""),color=String(body.color||"#7135FF"),button=String(body.button_text||"Comprar"),channel=String(body.channel_id||"");
