@@ -74,6 +74,46 @@ export async function commerce(request,env,storeChannels){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,c.username FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   return json({orders,customers:await list("SELECT discord_id,username,created_at FROM customers WHERE store_id=? LIMIT 100",store.id),coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:await list("SELECT type,amount_cents,status,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id),gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? LIMIT 100",store.id)});
  }
+ if(path==="/api/commerce/pix"&&request.method==="POST"){
+  const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
+  if(!order)return fail("Pedido pendente não encontrado.",404);
+  const buyerName=String(body.buyer_name||"").trim(),email=String(body.buyer_email||"").trim().toLowerCase();
+  if(buyerName.length<2||buyerName.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return fail("Informe nome e e-mail válidos para gerar o Pix.");
+  const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected'").bind(store.id).first();
+  if(!gateway)return fail("Conecte um provedor de pagamento primeiro.",409);
+  if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Chave de criptografia não configurada.",503);
+  const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
+  if(!ivHex||!cipherHex)return fail("Credencial armazenada inválida.",500);
+  const bytes=h=>Uint8Array.from(h.match(/../g)||[],x=>parseInt(x,16));
+  const cryptoKey=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["decrypt"]);
+  let token;try{token=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:bytes(ivHex)},cryptoKey,bytes(cipherHex)));}catch{return fail("Não foi possível abrir a credencial.",500);}
+  const externalReference="zynox_"+order.id;
+  const previous=await env.DB.prepare("SELECT id,pix_code,qr_code,expires_at FROM payments WHERE order_id=? AND status='pending'").bind(order.id).first();
+  if(previous)return json({success:true,payment:previous});
+  let externalId,pixCode,qrCode,expiresAt;
+  if(gateway.provider==="asaas"||gateway.provider==="asaas_sandbox"){
+   const base=gateway.provider==="asaas"?"https://api.asaas.com/v3":"https://api-sandbox.asaas.com/v3";
+   const headers={"access_token":token,"Content-Type":"application/json"};
+   const customerRes=await fetch(base+"/customers",{method:"POST",headers,body:JSON.stringify({name:buyerName,email,externalReference}),signal:AbortSignal.timeout(12000)});
+   if(!customerRes.ok)return fail("Asaas não conseguiu cadastrar o pagador.",502);
+   const customer=await customerRes.json();
+   const dueDate=new Date(Date.now()+10*60*1000).toISOString().slice(0,10);
+   const paymentRes=await fetch(base+"/payments",{method:"POST",headers,body:JSON.stringify({customer:customer.id,billingType:"PIX",value:order.total_cents/100,dueDate,description:(order.product_name+" - "+order.variant_name).slice(0,500),externalReference}),signal:AbortSignal.timeout(12000)});
+   if(!paymentRes.ok)return fail("Asaas não conseguiu gerar a cobrança Pix.",502);
+   const payment=await paymentRes.json();externalId=payment.id;expiresAt=payment.dueDate;
+   const qrRes=await fetch(base+"/payments/"+encodeURIComponent(externalId)+"/pixQrCode",{headers,signal:AbortSignal.timeout(12000)});
+   if(!qrRes.ok)return fail("Cobrança criada, mas não foi possível obter o QR Code. Consulte o painel Asaas.",502);
+   const qr=await qrRes.json();pixCode=qr.payload;qrCode=qr.encodedImage;
+  }else if(gateway.provider==="mercadopago"){
+   const paymentRes=await fetch("https://api.mercadopago.com/v1/payments",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","X-Idempotency-Key":order.id},body:JSON.stringify({transaction_amount:order.total_cents/100,description:(order.product_name+" - "+order.variant_name).slice(0,255),payment_method_id:"pix",external_reference:externalReference,payer:{email,first_name:buyerName}}),signal:AbortSignal.timeout(12000)});
+   if(!paymentRes.ok)return fail("Mercado Pago não conseguiu gerar a cobrança Pix.",502);
+   const payment=await paymentRes.json();externalId=String(payment.id);pixCode=payment.point_of_interaction?.transaction_data?.qr_code;qrCode=payment.point_of_interaction?.transaction_data?.qr_code_base64;expiresAt=payment.date_of_expiration;
+  }else return fail("Provedor não suportado para Pix.",400);
+  if(!externalId||!pixCode)return fail("O provedor não retornou os dados Pix.",502);
+  const id=crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO payments(id,order_id,gateway_id,external_id,amount_cents,pix_code,qr_code,status,expires_at) VALUES(?,?,?,?,?,?,?,'pending',?)").bind(id,order.id,gateway.id,externalId,order.total_cents,pixCode,qrCode||null,""+(expiresAt||"")).run();
+  return json({success:true,payment:{id,external_id:externalId,amount_cents:order.total_cents,pix_code:pixCode,qr_code:qrCode||null,expires_at:expiresAt||null}},201);
+ }
  if(path==="/api/commerce/gateways"&&request.method==="POST"){
   const provider=String(body.provider||""),token=String(body.api_token||"").trim();
   const endpoints={mercadopago:{url:"https://api.mercadopago.com/users/me",headers:t=>({Authorization:"Bearer "+t})},asaas:{url:"https://api.asaas.com/v3/myAccount",headers:t=>({access_token:t})},asaas_sandbox:{url:"https://api-sandbox.asaas.com/v3/myAccount",headers:t=>({access_token:t})}};
