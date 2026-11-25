@@ -987,7 +987,57 @@ function navigate(page) {
     });
     const imagePreview=node("img");imagePreview.alt="Prévia da imagem";imagePreview.style.cssText="display:none;max-width:100%;max-height:240px;object-fit:contain;border-radius:12px";
     const show=()=>{preview.textContent=examples[style.value];const url=imageUrl.value.trim();imagePreview.style.display=/^(https:\/\/|\/notification-(classic|compact|premium)\.svg$)/i.test(url)?"block":"none";if(imagePreview.style.display==="block")imagePreview.src=url;};style.addEventListener("change",()=>{show();renderPresets();});imageUrl.addEventListener("input",()=>{show();renderPresets();});imageUrl.value=presetUrl(style.value);show();renderPresets();preview.style.whiteSpace="pre-line";
-    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,button("Salvar notificações",async()=>{if(!channel.value)throw Error("Selecione primeiro o canal do Discord para publicar as notificações.");await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
+
+    const editTitle=node("h3","Editar texto na imagem");
+    const editText=node("textarea",undefined,"control-input");editText.rows=3;editText.value="PAGAMENTO CONFIRMADO\nProduto: {produto}\nCliente: {cliente}\nValor: {valor}";
+    const editHint=node("p","Arraste o texto na prévia para posicionar. Use {produto}, {cliente} e {valor} como exemplos. Para gravar o texto na imagem, é necessário o armazenamento R2.");
+    const textSize=input("","number");textSize.min="12";textSize.max="90";textSize.value="30";
+    const textColor=input("","color");textColor.value="#ffffff";
+    const textX=input("","range");textX.min="0";textX.max="100";textX.value="50";
+    const textY=input("","range");textY.min="0";textY.max="100";textY.value="50";
+    const imageStage=node("div");imageStage.style.cssText="position:relative;display:none;width:100%;max-width:540px;overflow:hidden;border-radius:12px;touch-action:none;background:#120b26";
+    const stageImage=node("img");stageImage.style.cssText="display:block;width:100%;height:auto;max-height:420px;object-fit:contain";
+    const overlay=node("div");overlay.style.cssText="position:absolute;white-space:pre-line;max-width:94%;text-align:center;transform:translate(-50%,-50%);font-weight:800;text-shadow:0 2px 7px #000,0 0 3px #000;cursor:grab;touch-action:none;overflow-wrap:anywhere";
+    imageStage.append(stageImage,overlay);
+    const renderOverlay=()=>{
+      overlay.textContent=editText.value.replaceAll("{produto}","Gerador de Sensi").replaceAll("{cliente}","@cliente").replaceAll("{valor}","R$ 20,00");
+      overlay.style.left=textX.value+"%";overlay.style.top=textY.value+"%";
+      overlay.style.color=textColor.value;overlay.style.fontSize=Math.max(10,Number(textSize.value)||30)*Math.min(imageStage.clientWidth||360,540)/540+"px";
+      const source=imagePreview.src;imageStage.style.display=imagePreview.style.display==="block"?"block":"none";
+      if(source&&stageImage.src!==source)stageImage.src=source;
+    };
+    for(const control of [editText,textSize,textColor,textX,textY])control.addEventListener("input",renderOverlay);
+    overlay.addEventListener("pointerdown",event=>{event.preventDefault();overlay.setPointerCapture(event.pointerId);});
+    overlay.addEventListener("pointermove",event=>{
+      if(!overlay.hasPointerCapture(event.pointerId))return;
+      const rect=imageStage.getBoundingClientRect();
+      textX.value=String(Math.round(Math.max(0,Math.min(100,(event.clientX-rect.left)/rect.width*100))));
+      textY.value=String(Math.round(Math.max(0,Math.min(100,(event.clientY-rect.top)/rect.height*100))));
+      renderOverlay();
+    });
+    const exportButton=button("Aplicar texto à imagem",async()=>{
+      if(!stageImage.complete||!stageImage.naturalWidth)throw Error("Aguarde a imagem carregar.");
+      const canvas=document.createElement("canvas");canvas.width=stageImage.naturalWidth;canvas.height=stageImage.naturalHeight;
+      const ctx=canvas.getContext("2d");ctx.drawImage(stageImage,0,0);
+      const scale=canvas.width/540;const size=Math.max(12,Number(textSize.value)||30)*scale;
+      ctx.fillStyle=textColor.value;ctx.strokeStyle="#000000";ctx.lineWidth=Math.max(2,4*scale);ctx.font="800 "+size+"px Arial";ctx.textAlign="center";ctx.textBaseline="middle";
+      const lines=overlay.textContent.split("\n");const cx=canvas.width*Number(textX.value)/100,cy=canvas.height*Number(textY.value)/100;
+      const wrap=[];for(const line of lines){let current="";for(const word of line.split(/\s+/)){const next=current?current+" "+word:word;if(ctx.measureText(next).width>canvas.width*.88&&current){wrap.push(current);current=word;}else current=next;}wrap.push(current);}
+      const start=cy-(wrap.length-1)*size*1.18/2;wrap.forEach((line,i)=>{const y=start+i*size*1.18;ctx.strokeText(line,cx,y);ctx.fillText(line,cx,y);});
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));if(!blob)throw Error("Não foi possível criar a imagem.");
+      const response=await fetch("/api/media/sales?store="+encodeURIComponent(ZYNOX.store.id),{method:"POST",headers:{"Content-Type":"image/png"},body:blob});
+      const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao enviar imagem.");
+      imageUrl.value=data.url;imagePreview.src=data.url;uploadStatus.textContent="Imagem editada enviada. Agora clique em Salvar notificações.";renderPresets();renderOverlay();
+    });
+    const originalShow=show;
+    const refreshEditor=()=>{renderOverlay();};
+    imagePreview.addEventListener("load",refreshEditor);
+    stageImage.addEventListener("load",renderOverlay);
+    imageUrl.addEventListener("input",()=>requestAnimationFrame(renderOverlay));
+    style.addEventListener("change",()=>requestAnimationFrame(renderOverlay));
+    presets.addEventListener("click",()=>requestAnimationFrame(renderOverlay));
+    imagePicker.addEventListener("change",()=>setTimeout(renderOverlay,100));
+    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,editTitle,field("Texto da imagem",editText),editHint,field("Tamanho da fonte",textSize),field("Cor do texto",textColor),field("Posição horizontal",textX),field("Posição vertical",textY),imageStage,exportButton,button("Salvar notificações",async()=>{if(!channel.value)throw Error("Selecione primeiro o canal do Discord para publicar as notificações.");await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
     Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name+(c.available?"":" (sem permissão)"),c.id);o.disabled=!c.available;channel.append(o);}if(!n.settings&&d.channels.filter(c=>c.available).length===1)channel.value=d.channels.find(c=>c.available).id;if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||presetUrl(style.value);show();renderPresets();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar as migrações 0007 e 0010 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
