@@ -1240,6 +1240,8 @@ function navigate(page) {
     invite.href = "https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
     invite.target = "_blank";
     invite.rel = "noopener noreferrer";
+    const nickname=input("Nome do bot neste servidor");nickname.maxLength=32;
+    box.append(node("h3","Personalização por servidor"),node("p","Cada servidor pode definir um apelido próprio. Foto, banner e biografia do perfil do bot são compartilhados no Discord."),field("Apelido do bot",nickname),button("Salvar nome neste servidor",async()=>{if(!ZYNOX.store)throw Error("Selecione um servidor.");await api("/api/commerce/bot-nickname",{store_id:ZYNOX.store.id,nickname:nickname.value});toast("Nome atualizado no servidor.",true);}));
     box.append(invite,node("p","Aplicação compartilhada da ZYNOX. O bot usa interações HTTP; o indicador online do Discord pode aparecer desligado."),button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver automações",()=>navigate("automations")),node("h3","Comandos disponíveis"),node("p","/ping • /zynox • /painel • /ajuda"));
     if (isOwner()) {
       const status = node("p","Verifique a conexão ou registre os comandos.");
