@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>ZYNOX | Assinaturas</title>
+  <link rel="stylesheet" href="/plans.css">
+  <script src="/plans.js" defer></script>
+</head>
+
+<body>
+
+  <header class="topbar">
+    <a href="/" class="logo">ZYNOX</a>
+    <button id="logout">Sair</button>
+  </header>
+
+  <div id="loading">
+    <h2>ZYNOX</h2>
+    <p>Verificando sua conta...</p>
+  </div>
+
+  <main id="app" hidden>
+
+    <section class="welcome">
+      <span class="tag">ZYNOX MEMBERSHIP</span>
+
+      <h1>Escolha seu plano.</h1>
+
+      <p>
+        Olá, <strong id="username">usuário</strong>.
+        Ative sua assinatura e transforme
+        seu servidor em uma loja automatizada.
+      </p>
+
+      <div class="subscription-status">
+        Nenhuma assinatura ativa
+      </div>
+    </section>
+
+    <section class="plans">
+
+      <article class="plan-card">
+
+        <span class="plan-label">ESSENCIAL</span>
+
+        <h2>Starter</h2>
+
+        <p>Comece sua operação de vendas.</p>
+
+        <div class="price">
+          <small>A partir de</small>
+          <strong>R$ 4,90</strong>
+        </div>
+
+        <ul>
+          <li>Bot de vendas</li>
+          <li>Gerenciamento de produtos</li>
+          <li>Estoque digital</li>
+          <li>Entrega automatizada</li>
+          <li>Painel de gerenciamento</li>
+        </ul>
+
+        <button data-plan="starter">
+          Selecionar Starter
+        </button>
+
+      </article>
+
+      <article class="plan-card featured">
+
+        <span class="plan-label">PROFISSIONAL</span>
+
+        <h2>Pro</h2>
+
+        <p>Expanda sua operação.</p>
+
+        <div class="price">
+          <small>A partir de</small>
+          <strong>R$ 7,90</strong>
+        </div>
+
+        <ul>
+          <li>Recursos do Starter</li>
+          <li>Automações avançadas</li>
+          <li>Cupons e ofertas</li>
+          <li>Relatórios de vendas</li>
+          <li>Integrações financeiras</li>
+        </ul>
+
+        <button data-plan="pro">
+          Selecionar Pro
+        </button>
+
+      </article>
+
+      <article class="plan-card">
+
+        <span class="plan-label">EXCLUSIVO</span>
+
+        <h2>Premium</h2>
+
+        <p>Explore todo o potencial da ZYNOX.</p>
+
+        <div class="price">
+          <small>A partir de</small>
+          <strong>R$ 12,90</strong>
+        </div>
+
+        <ul>
+          <li>Recursos do Pro</li>
+          <li>Zynox AI</li>
+          <li>Relatórios avançados</li>
+          <li>Integrações adicionais</li>
+          <li>Suporte prioritário</li>
+        </ul>
+
+        <button data-plan="premium">
+          Selecionar Premium
+        </button>
+
+      </article>
+
+    </section>
+
+    <p class="pricing-notice">
+      Valores e benefícios provisórios.
+      Compras ainda indisponíveis.
+    </p>
+
+    <section id="duration-panel" hidden>
+
+      <h2 id="selected-plan">
+        Escolha a duração
+      </h2>
+
+      <p>
+        Selecione o período da sua assinatura.
+      </p>
+
+      <div id="duration-options"></div>
+
+      <button id="close-duration">
+        Voltar aos planos
+      </button>
+
+    </section>
+
+    <section class="license-panel">
+
+      <span class="tag">ATIVAÇÃO DE LICENÇA</span>
+
+      <h2>Já possui uma KEY?</h2>
+
+      <p>
+        Insira sua chave de ativação para
+        liberar o acesso à plataforma.
+      </p>
+
+      <form id="license-form">
+
+        <label for="license-key">
+          Chave de ativação
+        </label>
+
+        <input
+          type="text"
+          id="license-key"
+          placeholder="ZYNOX-XXXX-XXXX-XXXX"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          maxlength="128"
+          required
+        >
+
+        <button
+          type="submit"
+          id="activate-license"
+        >
+          Ativar licença
+        </button>
+
+        <div
+          id="license-message"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+      </form>
+
+      <small>
+        Cada licença poderá ser utilizada
+        apenas uma vez e será vinculada
+        à sua conta.
+      </small>
+
+    </section>
+
+    <footer>
+      <strong>ZYNOX</strong>
+      <p>Automação. Tecnologia. Liberdade.</p>
+      <small>Todos os direitos reservados.</small>
+    </footer>
+
+  </main>
+
+</body>
+</html>
