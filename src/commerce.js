@@ -149,19 +149,26 @@ export async function commerce(request,env,storeChannels){
   const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
   const hex=h=>Uint8Array.from(String(h).match(/../g)||[],x=>parseInt(x,16));
   let token;try{const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["decrypt"]);token=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:hex(ivHex)},key,hex(cipherHex)));}catch{return fail("Credencial Asaas inválida.",500);}
-  const ledger=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status IN ('completed','pending') THEN -amount_cents ELSE 0 END),0) AS amount FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
-  if(ledger.amount<amount)return fail("Saldo disponível na carteira insuficiente.",409);
-  const base=gateway.provider==="asaas_sandbox"?"https://api-sandbox.asaas.com/v3":"https://api.asaas.com/v3",headers={"access_token":token,"Content-Type":"application/json"};
-  const balanceRes=await fetch(base+"/finance/balance",{headers,signal:AbortSignal.timeout(10000)});
-  if(!balanceRes.ok)return fail("Não foi possível consultar o saldo Asaas.",502);
-  const bankBalance=await balanceRes.json();
-  if(Math.round(Number(bankBalance.balance||0)*100)<amount)return fail("Saldo disponível na conta Asaas insuficiente.",409);
   const id=crypto.randomUUID(),externalReference="zynox_withdrawal_"+id;
-  const transferRes=await fetch(base+"/transfers",{method:"POST",headers,body:JSON.stringify({value:amount/100,pixAddressKey:pixKey,pixAddressKeyType:keyType,operationType:"PIX",description:"Saque carteira ZYNOX",externalReference}),signal:AbortSignal.timeout(15000)});
-  if(!transferRes.ok)return fail("Asaas recusou a transferência. Nenhum saque foi registrado como concluído.",502);
+  const reserve=await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) SELECT ?,?,'withdrawal',?,?,'pending','Saque Pix reservado — aguardando confirmação do Asaas' WHERE ? <= (SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status IN ('completed','pending') THEN -amount_cents ELSE 0 END),0) FROM wallet_transactions WHERE store_id=?)").bind(id,store.id,amount,"withdrawal_request:"+id,amount,store.id).run();
+  if(!reserve.meta.changes)return fail("Saldo disponível insuficiente ou já reservado por outro saque.",409);
+  let transferRes;
+  try{
+   transferRes=await fetch(base+"/transfers",{method:"POST",headers:{...headers,"X-Idempotency-Key":id},body:JSON.stringify({value:amount/100,pixAddressKey:pixKey,pixAddressKeyType:keyType,operationType:"PIX",description:"Saque Pix carteira ZYNOX",externalReference}),signal:AbortSignal.timeout(15000)});
+  }catch{
+   await env.DB.prepare("UPDATE wallet_transactions SET description='Saque em análise — resposta do Asaas não confirmada; não repetir manualmente' WHERE id=?").bind(id).run();
+   return fail("Não foi possível confirmar a resposta do Asaas. O valor ficou reservado; verifique o painel do Asaas antes de tentar novamente.",502);
+  }
+  if(!transferRes.ok){
+   await env.DB.prepare("UPDATE wallet_transactions SET status='failed',description='Asaas recusou a transferência Pix' WHERE id=? AND status='pending'").bind(id).run();
+   return fail("Asaas recusou a transferência. A reserva foi cancelada.",502);
+  }
   const transfer=await transferRes.json();
-  if(!transfer.id)return fail("Asaas não retornou o identificador da transferência.",502);
-  await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) VALUES(?,?,'withdrawal',?,?,?,?)").bind(id,store.id,amount,"asaas_transfer:"+transfer.id,["DONE","CONFIRMED"].includes(transfer.status)?"completed":"pending","Saque Pix Asaas — "+String(transfer.status||"PENDING")).run();
+  if(!transfer.id){
+   await env.DB.prepare("UPDATE wallet_transactions SET description='Saque em análise — Asaas não retornou ID; conferir manualmente' WHERE id=?").bind(id).run();
+   return fail("Asaas não retornou o identificador. O valor ficou reservado para conferência.",502);
+  }
+  await env.DB.prepare("UPDATE wallet_transactions SET external_reference=?,status=?,description=? WHERE id=?").bind("asaas_transfer:"+transfer.id,["DONE","CONFIRMED"].includes(transfer.status)?"completed":"pending","Saque Pix Asaas — "+String(transfer.status||"PENDING"),id).run();
   return json({success:true,withdrawal:{id,provider_transfer_id:transfer.id,amount_cents:amount,status:transfer.status||"PENDING"}},201);
  }
  if(path==="/api/commerce/wallet/withdrawals"&&request.method==="POST"){
