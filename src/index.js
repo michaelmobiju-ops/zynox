@@ -1,3 +1,4 @@
+import {cart} from "./cart.js";
 import {commerce} from "./commerce.js";
 import {
   discordLogin,
@@ -147,6 +148,7 @@ export default {
         try { interaction = JSON.parse(raw); } catch { return json({error:"JSON inválido."},400); }
         if (interaction.type === 1) return json({type:1});
         if (interaction.application_id !== env.DISCORD_CLIENT_ID) return new Response("Unauthorized",{status:401});
+        if (interaction.type === 3) { const result = await cart(interaction,env); if(result) return json(result); }
         const replies = {
           ping: "🏓 Pong! ZYNOX está respondendo.",
           zynox: "ZYNOX — plataforma de automação de vendas para Discord.",
