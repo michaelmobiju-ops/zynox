@@ -5,6 +5,10 @@ import {
   logout
 } from "./auth.js";
 
+import {
+  handleLicenses
+} from "./licenses.js";
+
 const privateHeaders = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
@@ -78,6 +82,9 @@ export default {
     const path = url.pathname;
 
     try {
+
+      // LOGIN COM DISCORD
+
       if (
         path === "/auth/discord" &&
         request.method === "GET"
@@ -91,6 +98,8 @@ export default {
       ) {
         return await discordCallback(request, env);
       }
+
+      // ENCERRAR SESSÃO
 
       if (path === "/auth/logout") {
         if (request.method !== "POST") {
@@ -109,6 +118,8 @@ export default {
 
         return await logout(request, env);
       }
+
+      // USUÁRIO AUTENTICADO
 
       if (path === "/api/me") {
         const user = await getSession(request, env);
@@ -129,38 +140,62 @@ export default {
         });
       }
 
+      // SISTEMA DE LICENÇAS
+
+      if (
+        path === "/api/licenses/redeem" ||
+        path.startsWith("/api/owner/licenses/")
+      ) {
+        return await handleLicenses(
+          request,
+          env
+        );
+      }
+
+      // STATUS DO SERVIDOR
+
       if (path === "/api/status") {
-        await env.DB.prepare("SELECT 1").first();
+        await env.DB.prepare(
+          "SELECT 1"
+        ).first();
 
         return json({
           name: "ZYNOX",
           status: "online",
           database: "connected",
-          version: "1.2.0"
+          version: "1.3.0"
         });
       }
+
+      // CONFIGURAÇÕES PÚBLICAS
 
       if (path === "/api/config") {
         return json({
           name: "ZYNOX",
           description:
             "Automação de vendas para Discord",
+
           theme: {
             primary: "#7135FF",
             secondary: "#C084FC",
             background: "#08080B",
             text: "#FFFFFF"
           },
+
           features: {
             products: false,
             payments: false,
             discord: false,
             discordLogin: true,
+            licenses: true,
+            adminLogin: false,
             wallet: false,
             artificialIntelligence: false
           }
         });
       }
+
+      // DASHBOARD PROTEGIDO
 
       if (
         path === "/dashboard" ||
@@ -187,6 +222,8 @@ export default {
         );
       }
 
+      // PÁGINA DE ASSINATURAS
+
       if (
         path === "/plans" ||
         path === "/plans/" ||
@@ -212,6 +249,8 @@ export default {
         );
       }
 
+      // PROTEÇÃO ADMINISTRATIVA
+
       if (
         path.startsWith("/api/admin/") ||
         path.startsWith("/api/owner/")
@@ -235,14 +274,18 @@ export default {
           user.role !== "owner"
         ) {
           return json({
-            error: "Acesso exclusivo do proprietário."
+            error:
+              "Acesso exclusivo do proprietário."
           }, 403);
         }
 
         return json({
-          error: "Funcionalidade ainda indisponível."
+          error:
+            "Funcionalidade ainda indisponível."
         }, 501);
       }
+
+      // ROTAS INEXISTENTES
 
       if (path.startsWith("/api/")) {
         return json({
@@ -250,10 +293,15 @@ export default {
         }, 404);
       }
 
+      // ARQUIVOS DO SITE
+
       return await env.ASSETS.fetch(request);
 
     } catch (error) {
-      console.error("ZYNOX:", error.name);
+      console.error(
+        "ZYNOX:",
+        error.name
+      );
 
       return json({
         error: "Erro interno do servidor."
