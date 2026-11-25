@@ -330,6 +330,31 @@ export default {
         return json({servers,limited:guilds.length>20});
       }
 
+      if (path === "/api/discord/store/link") {
+        if (request.method !== "POST") return json({error:"Método não permitido."},405);
+        if (request.headers.get("Origin") !== url.origin) return json({error:"Acesso negado."},403);
+        const user = await getSession(request,env);
+        if (!user || !user.discord_id || (!isAdmin(user) && !await getSubscription(env,user.id))) return json({error:"Acesso restrito."},403);
+        let body;
+        try { body = await request.json(); } catch { return json({error:"Dados inválidos."},400); }
+        const guild = String(body.guild_id || "");
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!/^\d{17,20}$/.test(guild) || !name || name.length>100) return json({error:"Servidor ou nome inválido."},400);
+        if (!env.DISCORD_BOT_TOKEN) return json({error:"Bot indisponível."},503);
+        const headers = {Authorization:"Bot "+env.DISCORD_BOT_TOKEN};
+        const call = p => fetch("https://discord.com/api/v10"+p,{headers,signal:AbortSignal.timeout(8000)});
+        const [mr,gr] = await Promise.all([call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild)]);
+        if (!mr.ok || !gr.ok) return json({error:"Servidor não autorizado ou indisponível."},403);
+        const member = await mr.json(), detail = await gr.json();
+        const roles = new Set([guild,...member.roles]);
+        const permissions = detail.roles.reduce((p,role)=>roles.has(role.id)?p|BigInt(role.permissions):p,0n);
+        if (detail.owner_id !== user.discord_id && !(permissions & 40n)) return json({error:"Sem permissão para gerenciar servidor."},403);
+        await env.DB.prepare("INSERT INTO stores (id,owner_id,name,guild_id) VALUES (?,?,?,?) ON CONFLICT(guild_id) DO NOTHING").bind(crypto.randomUUID(),user.id,name,guild).run();
+        const store = await env.DB.prepare("SELECT id,name,owner_id FROM stores WHERE guild_id=?").bind(guild).first();
+        if (!store || store.owner_id !== user.id) return json({error:"Servidor já vinculado a outra loja."},409);
+        return json({success:true,store:{id:store.id,name:store.name}});
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
