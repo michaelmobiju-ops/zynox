@@ -278,7 +278,7 @@ function renderPlans(){
   card.append(node("h3",tier.title));
   for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
   if(tier.key===ZYNOX.subscription?.plan?.toLowerCase())card.append(node("p","Plano atual"));
-  card.append(button("Ver períodos e valores",()=>{window.location.href="/plano/"+tier.key;}));
+  card.append(button("Ver períodos e valores",()=>{window.location.href="/plan-detail.html?plan="+tier.key;}));
   grid.append(card);
  }
  box.append(grid,node("p","Preços provisórios. Compras ainda não habilitadas."));
