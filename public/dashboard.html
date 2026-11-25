@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
   <link rel="stylesheet" href="/dashboard.css?v=b937f3b">
-  <script src="/dashboard.js?v=fd80b0a" defer></script>
+  <script src="/dashboard.js?v=c1bb54f" defer></script>
 </head>
 
 <body>
@@ -96,36 +96,37 @@
         <p>Gerencie sua operação em um único lugar.</p>
       </section>
 
+      <section class="panel"><label for="dashboard-store">Loja</label><select id="dashboard-store" class="control-input"><option value="">Todas as minhas lojas</option></select><button id="dashboard-refresh" class="control-button">Atualizar indicadores</button><p id="dashboard-status" role="status">Carregando...</p></section>
       <section class="metrics">
 
         <article class="metric">
-          <span>Receita total</span>
+          <span>Receita bruta confirmada</span>
           <strong id="total-revenue">—</strong>
-          <small>Aguardando integração</small>
+          <small>Dados registrados na plataforma</small>
         </article>
 
         <article class="metric">
-          <span>Vendas realizadas</span>
+          <span>Vendas confirmadas</span>
           <strong id="total-sales">—</strong>
-          <small>Aguardando integração</small>
+          <small>Dados registrados na plataforma</small>
         </article>
 
         <article class="metric">
           <span>Produtos ativos</span>
           <strong id="total-products">—</strong>
-          <small>Aguardando integração</small>
+          <small>Dados registrados na plataforma</small>
         </article>
 
         <article class="metric">
           <span>Clientes</span>
           <strong id="total-customers">—</strong>
-          <small>Aguardando integração</small>
+          <small>Dados registrados na plataforma</small>
         </article>
 
       </section>
 
       <section class="panel">
-        <h2>Desempenho de vendas</h2>
+        <h2>Desempenho de vendas — últimos 7 dias (UTC)</h2><p>Inclui pagamentos de teste registrados. Não representa saldo bancário.</p>
         <div id="sales-chart" class="chart">
           <p>Nenhum relatório disponível.</p>
         </div>
