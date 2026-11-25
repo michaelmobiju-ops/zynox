@@ -267,8 +267,6 @@ function renderAccount(){
 
 function renderPlans(){
  const box=panel("Atualizar plano","Escolha um plano para consultar detalhes, benefícios e períodos disponíveis.");
- const current=ZYNOX.subscription?.plan?.toLowerCase()||"";
- if(isAdmin())box.append(node("p","Acesso administrativo ilimitado."));
  const tiers=[
   {key:"starter",title:"Starter",benefits:["Produtos e estoque","Vendas e relatórios","Pix manual"]},
   {key:"pro",title:"Pro",benefits:["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"]},
@@ -279,7 +277,7 @@ function renderPlans(){
   const card=node("div",undefined,"plan-card");
   card.append(node("h3",tier.title));
   for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
-  if(tier.key===current)card.append(node("p","Plano atual"));
+  if(tier.key===ZYNOX.subscription?.plan?.toLowerCase())card.append(node("p","Plano atual"));
   card.append(button("Ver períodos e valores",()=>{window.location.href="/plano/"+tier.key;}));
   grid.append(card);
  }
@@ -1016,13 +1014,14 @@ function navigate(page) {
       for(const [key,title] of options){const b=button(title,()=>{tab=key;render();});if(key===tab)b.classList.add("selected");nav.append(b);}
       if(tab==="gateways"){content.append(node("h3","Gateways"),node("p","EM BREVE !"));return;}
       if(tab==="banks"){
-        content.append(node("h3","Selecione seu banco"));
-        const grid=node("div",undefined,"zynox-bank-grid");
-        for(const [id,name] of banks){const b=button(name,()=>{selectedBank=id;tab="pix";render();});if(id===selectedBank)b.classList.add("selected");grid.append(b);}
-        content.append(grid);return;
-      }
-      const status=node("p","Carregando configuração...");content.append(node("h3","Pix manual"),node("p","Banco selecionado: "+bankNames[selectedBank]),button("Trocar banco",()=>{tab="banks";render();}),status);
-      api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
+         content.append(node("h3","Bancos — configuração Pix manual"),node("p","Escolha seu banco e cadastre a chave Pix. O cadastro não conecta a conta bancária nem consulta saldos."));
+         const grid=node("div",undefined,"zynox-bank-grid");
+         for(const [id,name] of banks){const b=button(name,()=>{selectedBank=id;bankLoaded=true;render();});if(id===selectedBank)b.classList.add("selected");grid.append(b);}
+         content.append(grid);
+       }
+       const status=node("p","Carregando configuração...");
+       content.append(node("h3",tab==="banks"?"Informações do banco":"Pix manual"),node("p","Banco: "+bankNames[selectedBank]),status);
+       api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
         if(tab!=="pix"&&tab!=="banks")return;
         const type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
         if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;}if(m.settings.bank===selectedBank){type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}}
@@ -1369,12 +1368,4 @@ async function initialize() {
 document.addEventListener(
   "DOMContentLoaded",
   initialize
-);       if(tab==="banks"){
-         content.append(node("h3","Bancos — configuração Pix manual"),node("p","Escolha seu banco e cadastre a chave Pix. O cadastro não conecta a conta bancária nem consulta saldos."));
-         const grid=node("div",undefined,"zynox-bank-grid");
-         for(const [id,name] of banks){const b=button(name,()=>{selectedBank=id;bankLoaded=true;render();});if(id===selectedBank)b.classList.add("selected");grid.append(b);}
-         content.append(grid);
-       }
-       const status=node("p","Carregando configuração...");
-       content.append(node("h3",tab==="banks"?"Informações do banco":"Pix manual"),node("p","Banco: "+bankNames[selectedBank]),status);
-
+);
