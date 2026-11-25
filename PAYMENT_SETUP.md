@@ -63,3 +63,7 @@ A carteira agora oferece solicitação de transferência Pix para chave CPF, CNP
 Configure o webhook Asaas no mesmo endpoint `/webhooks/payments`, com o token `ASAAS_WEBHOOK_TOKEN`, habilitando eventos de transferência. Os eventos `TRANSFER_DONE`, `TRANSFER_FAILED` e `TRANSFER_CANCELLED` atualizam o lançamento da carteira. Uma transferência criada ou pendente não deve ser apresentada como concluída.
 
 **Importante:** a transferência sai do saldo da conta Asaas vinculada à loja. Isso não é Open Finance nem conexão direta com contas de outros bancos. Mercado Pago ainda não oferece saque automático por este fluxo. Teste no Asaas Sandbox antes de usar produção.
+
+### Proteção contra saque duplicado
+
+Antes de chamar o Asaas, a API reserva o valor como retirada pendente no livro-caixa por uma inserção condicional. Se a chamada falhar de forma inequívoca, a reserva é marcada como falha; se houver timeout ou resposta ambígua, permanece reservada e o painel do Asaas deve ser conferido. O webhook também tenta reconciliar a transferência pela referência externa. Não repita manualmente um saque em análise sem confirmar primeiro o estado no Asaas.
