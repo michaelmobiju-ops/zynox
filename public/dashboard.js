@@ -223,10 +223,10 @@ function updateProfile() {
     ? "DONO"
     : user.role === "admin"
       ? "ADM"
-      : ZYNOX.subscription?.plan?.toUpperCase()
-        || "SEM PLANO";
+      : "ASSINANTE";
 
-  if(element("selected-server"))element("selected-server").textContent="Servidores";
+  if(element("selected-server"))element("selected-server").textContent=ZYNOX.store?.name||"Servidores";
+  const headerAvatar=element("header-avatar");if(headerAvatar){headerAvatar.replaceChildren();if(ZYNOX.discordProfile?.avatar_url){const img=node("img");img.src=ZYNOX.discordProfile.avatar_url;img.alt="Foto de perfil";img.loading="lazy";headerAvatar.append(img);}else headerAvatar.textContent=user.username.slice(0,1).toUpperCase();}
   if (element("username")) {
     element("username").textContent = user.username;
   }
@@ -266,31 +266,25 @@ function renderAccount(){
 }
 
 function renderPlans(){
-  const box=panel("Atualizar plano","Compare as vantagens, escolha o período e consulte os valores. Pagamentos ainda não estão habilitados.");
-  const current=ZYNOX.subscription?.plan?.toLowerCase()||"";
-  const currentText=isAdmin()?"Acesso administrativo ilimitado":current?"Seu plano atual: "+current.toUpperCase():"Você ainda não tem plano ativo.";
-  box.append(node("p",currentText));
-  const tiers=[
-    {key:"starter",title:"Starter",benefits:["Produtos e estoque","Vendas e relatórios","Pix manual"],prices:[4.90,8.90,14.90,39.90,129.90,199.90]},
-    {key:"pro",title:"Pro",benefits:["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"],prices:[7.90,14.90,24.90,64.90,219.90,349.90]},
-    {key:"premium",title:"Premium",benefits:["Tudo do Pro","Recursos premium conforme disponibilidade","Prioridade nas novidades"],prices:[12.90,24.90,39.90,99.90,349.90,549.90]}
-  ];
-  const periods=["7 dias","15 dias","30 dias","90 dias","1 ano","Vitalício"];
-  const grid=node("div",undefined,"plan-grid");
-  for(const tier of tiers){
-    if(tier.key===current)continue;
-    const card=node("div",undefined,"plan-card");
-    card.append(node("h3",tier.title));
-    for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
-    const detail=node("div",undefined,"plan-duration");
-    card.append(button("Ver períodos e valores",()=>{
-      detail.replaceChildren(node("p","Valores provisórios — compra indisponível."));
-      for(let i=0;i<periods.length;i++)detail.append(node("p",periods[i]+" — "+money(Math.round(tier.prices[i]*100))));
-    }),detail);
-    grid.append(card);
-  }
-  box.append(grid,node("p","As vantagens são uma apresentação comercial; recursos ainda não disponíveis não são prometidos como ativos."));
-  element("main-content").append(box);
+ const box=panel("Atualizar plano","Escolha um plano para consultar detalhes, benefícios e períodos disponíveis.");
+ const current=ZYNOX.subscription?.plan?.toLowerCase()||"";
+ if(isAdmin())box.append(node("p","Acesso administrativo ilimitado."));
+ const tiers=[
+  {key:"starter",title:"Starter",benefits:["Produtos e estoque","Vendas e relatórios","Pix manual"]},
+  {key:"pro",title:"Pro",benefits:["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"]},
+  {key:"premium",title:"Premium",benefits:["Tudo do Pro","Recursos premium conforme disponibilidade","Prioridade nas novidades"]}
+ ];
+ const grid=node("div",undefined,"plan-grid");
+ for(const tier of tiers){
+  const card=node("div",undefined,"plan-card");
+  card.append(node("h3",tier.title));
+  for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
+  if(tier.key===current)card.append(node("p","Plano atual"));
+  card.append(button("Ver períodos e valores",()=>{window.location.href="/plano/"+tier.key;}));
+  grid.append(card);
+ }
+ box.append(grid,node("p","Preços provisórios. Compras ainda não habilitadas."));
+ element("main-content").append(box);
 }
 
 // ESTATÍSTICAS ADMINISTRATIVAS
@@ -1029,12 +1023,12 @@ function navigate(page) {
       }
       const status=node("p","Carregando configuração...");content.append(node("h3","Pix manual"),node("p","Banco selecionado: "+bankNames[selectedBank]),button("Trocar banco",()=>{tab="banks";render();}),status);
       api("/api/commerce/manual-pix?store="+encodeURIComponent(ZYNOX.store.id)).then(m=>{
-        if(tab!=="pix")return;
+        if(tab!=="pix"&&tab!=="banks")return;
         const type=select([["CPF","CPF"],["CNPJ","CNPJ"],["EMAIL","E-mail"],["PHONE","Telefone (+55)"],["EVP","Chave aleatória"]]),key=input("Sua chave Pix"),recipient=input("Nome do titular"),consent=input("","checkbox");
-        if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;}type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}
-        status.textContent=m.settings?.enabled?"Pix manual ativo":"Pix manual desativado";
+        if(m.settings){if(!bankLoaded){selectedBank=m.settings.bank;bankLoaded=true;}if(m.settings.bank===selectedBank){type.value=m.settings.key_type;key.value=m.settings.pix_key;recipient.value=m.settings.recipient;}}
+        status.textContent=m.settings?.enabled&&m.settings.bank===selectedBank?"Pix manual cadastrado para "+bankNames[selectedBank]+" — sem conexão bancária automática":"Banco ainda não cadastrado";
         content.append(field("Tipo de chave",type),field("Chave Pix",key),field("Titular da conta",recipient),field("Autorizo mostrar a chave privadamente aos compradores",consent),button("Salvar Pix manual",async()=>{
-          await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,bank:selectedBank,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});toast("Pix manual salvo.",true);render();
+          await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,bank:selectedBank,key_type:type.value,pix_key:key.value,recipient:recipient.value,accept_disclosure:consent.checked});toast("Pix manual salvo. Não é uma conexão bancária automática.",true);bankLoaded=true;render();
         }));
         if(m.settings?.enabled)content.append(button("Desativar Pix manual",async()=>{await api("/api/commerce/manual-pix",{store_id:ZYNOX.store.id,enabled:false});render();}));
       }).catch(e=>toast(e.message));
@@ -1375,4 +1369,12 @@ async function initialize() {
 document.addEventListener(
   "DOMContentLoaded",
   initialize
-);
+);       if(tab==="banks"){
+         content.append(node("h3","Bancos — configuração Pix manual"),node("p","Escolha seu banco e cadastre a chave Pix. O cadastro não conecta a conta bancária nem consulta saldos."));
+         const grid=node("div",undefined,"zynox-bank-grid");
+         for(const [id,name] of banks){const b=button(name,()=>{selectedBank=id;bankLoaded=true;render();});if(id===selectedBank)b.classList.add("selected");grid.append(b);}
+         content.append(grid);
+       }
+       const status=node("p","Carregando configuração...");
+       content.append(node("h3",tab==="banks"?"Informações do banco":"Pix manual"),node("p","Banco: "+bankNames[selectedBank]),status);
+
