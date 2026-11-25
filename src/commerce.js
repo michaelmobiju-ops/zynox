@@ -75,8 +75,11 @@ export async function commerce(request,env,storeChannels){
   return json({orders,customers:await list("SELECT discord_id,username,created_at FROM customers WHERE store_id=? LIMIT 100",store.id),coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:await list("SELECT type,amount_cents,status,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id),gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? LIMIT 100",store.id)});
  }
  if(path==="/api/commerce/pix"&&request.method==="POST"){
-  const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
+  const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,v.infinite_stock,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
   if(!order)return fail("Pedido pendente não encontrado.",404);
+  if(order.infinite_stock)return fail("Entrega automática de estoque infinito ainda não está disponível.",409);
+  const reserved=await env.DB.prepare("SELECT s.id FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.status='reserved'").bind(order.id).first();
+  if(!reserved)return fail("Reserva de estoque expirou. Crie um novo pedido.",409);
   const buyerName=String(body.buyer_name||"").trim(),email=String(body.buyer_email||"").trim().toLowerCase();
   if(buyerName.length<2||buyerName.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return fail("Informe nome e e-mail válidos para gerar o Pix.");
   const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected'").bind(store.id).first();
@@ -110,6 +113,7 @@ export async function commerce(request,env,storeChannels){
    const payment=await paymentRes.json();externalId=String(payment.id);pixCode=payment.point_of_interaction?.transaction_data?.qr_code;qrCode=payment.point_of_interaction?.transaction_data?.qr_code_base64;expiresAt=payment.date_of_expiration;
   }else return fail("Provedor não suportado para Pix.",400);
   if(!externalId||!pixCode)return fail("O provedor não retornou os dados Pix.",502);
+  await env.DB.prepare("UPDATE stock SET reserved_until=datetime('now','+24 hours') WHERE id IN (SELECT stock_id FROM order_stock WHERE order_id=?) AND status='reserved'").bind(order.id).run();
   const id=crypto.randomUUID();
   await env.DB.prepare("INSERT INTO payments(id,order_id,gateway_id,external_id,amount_cents,pix_code,qr_code,status,expires_at) VALUES(?,?,?,?,?,?,?,'pending',?)").bind(id,order.id,gateway.id,externalId,order.total_cents,pixCode,qrCode||null,""+(expiresAt||"")).run();
   return json({success:true,payment:{id,external_id:externalId,amount_cents:order.total_cents,pix_code:pixCode,qr_code:qrCode||null,expires_at:expiresAt||null}},201);
