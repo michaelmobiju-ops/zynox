@@ -1,3 +1,4 @@
+import {picpayToken} from "./picpay.js";
 import {deliver} from "./payment-webhook.js";
 import {getSession} from "./auth.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
@@ -92,6 +93,14 @@ export async function commerce(request,env,storeChannels){
   const customers=await list("SELECT c.discord_id,c.username,c.created_at,count(o.id) AS orders,COALESCE(SUM(CASE WHEN o.status IN ('paid','delivered') THEN o.total_cents ELSE 0 END),0) AS spent_cents FROM customers c LEFT JOIN orders o ON o.customer_id=c.id AND o.store_id=c.store_id WHERE c.store_id=? GROUP BY c.id ORDER BY c.created_at DESC LIMIT 100",store.id);
   const customerCount=await env.DB.prepare("SELECT count(*) AS total FROM customers WHERE store_id=?").bind(store.id).first();
   return json({orders,stats:{...stats,customers:customerCount.total},customers,coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:[],gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id)});
+ }
+ if(path==="/api/commerce/picpay/test"&&request.method==="POST"){
+  if(env.ENABLE_PICPAY_SANDBOX!=="true")return fail("Homologação PicPay ainda desativada.",503);
+  if(!env.LOGIN_RATE_LIMITER)return fail("Limite de requisições não configurado.",503);
+  const limit=await env.LOGIN_RATE_LIMITER.limit({key:"picpay:"+user.id});
+  if(!limit.success)return fail("Aguarde antes de tentar novamente.",429);
+  try{await picpayToken(String(body.client_id||""),String(body.client_secret||""));}catch{return fail("Não foi possível validar as credenciais de homologação.",422);}
+  return json({success:true,environment:"sandbox",connected:false,message:"Autenticação validada. Cobranças ainda desativadas."});
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="GET"){
   const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
