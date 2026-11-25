@@ -831,6 +831,30 @@ function navigate(page) {
     return;
   }
 
+  if (page === "servers") {
+    const box = panel("Servidores","Servidores com ZYNOX instalado e permissão de gerenciamento.");
+    const list = node("div");
+    const load = async () => {
+      list.replaceChildren(node("p","Consultando Discord..."));
+      try {
+        const data = await api("/api/discord/servers");
+        list.replaceChildren();
+        if (data.needsDiscord) list.append(node("p","Esta conta administrativa ainda não está vinculada ao Discord. A vinculação será implementada na próxima etapa."));
+        else if (!data.servers.length) list.append(node("p","Nenhum servidor autorizado encontrado."));
+        for (const server of data.servers) {
+          const card = node("div",undefined,"control-item");
+          card.append(node("h3",server.name),node("p",server.linked?"Loja vinculada":"Disponível para vinculação"));
+          list.append(card);
+        }
+        if (data.limited) list.append(node("p","Consulta inicial limitada a 20 servidores."));
+      } catch (error) { list.replaceChildren(node("p",error.message,"control-error")); }
+    };
+    box.append(button("Atualizar servidores",load),list);
+    main.append(box);
+    load();
+    return;
+  }
+
   if (page === "bot") {
     const box = panel("Meu bot", "Integração com o Discord");
     const invite = node("a","Adicionar bot ao servidor","control-button");
