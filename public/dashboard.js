@@ -228,45 +228,53 @@ function updateProfile() {
   }
 }
 
-function renderAccount() {
-  const box = panel(
-    "Minha conta",
-    "Informações da sua conta ZYNOX."
-  );
-
-  box.append(
-    node("p", "Usuário: " + ZYNOX.user.username),
-    node("p", "ID: " + ZYNOX.user.id),
-    node("p", "Cargo: " + ZYNOX.user.role),
-    node("p", "Discord: " + (
-      ZYNOX.user.discord_id || "Não vinculado"
-    ))
-  );
-
-  element("main-content").appendChild(box);
+function renderAccount(){
+  const box=panel("Minha conta","Seu perfil e informações da assinatura ZYNOX.");
+  const hero=node("div",undefined,"account-hero");
+  const profile=ZYNOX.discordProfile||{};
+  const banner=node("div",undefined,"account-banner");
+  if(profile.banner_url){const img=node("img");img.src=profile.banner_url;img.alt="Banner do Discord";banner.append(img);}
+  const row=node("div",undefined,"account-identity");
+  const avatar=node("div",ZYNOX.user.username.slice(0,2).toUpperCase(),"account-avatar");
+  if(profile.avatar_url){const img=node("img");img.src=profile.avatar_url;img.alt="Foto de perfil do Discord";avatar.append(img);}
+  row.append(avatar,node("div",undefined,"account-name"));
+  row.lastChild.append(node("h2",profile.display_name||ZYNOX.user.username),node("p","@"+ZYNOX.user.username));
+  hero.append(banner,row);
+  const details=node("div",undefined,"account-details");
+  const sub=ZYNOX.subscription;
+  for(const [label,value] of [["Usuário",ZYNOX.user.username],["ID da conta",ZYNOX.user.id],["Cargo",ZYNOX.user.role==="owner"?"Proprietário":ZYNOX.user.role==="admin"?"Administrador":"Assinante"],["Plano",isAdmin()?"Acesso administrativo ilimitado":sub?.plan?.toUpperCase()||"Sem plano"],["Validade",isAdmin()?"Ilimitada":sub?.lifetime?"Vitalícia":formatDate(sub?.expires_at)],["Discord ID",ZYNOX.user.discord_id||"Não vinculado"],["Situação da conta",ZYNOX.user.status||"Ativa"]]){
+    const item=node("div",undefined,"account-detail");item.append(node("span",label),node("strong",value));details.append(item);
+  }
+  box.append(hero,details,button("Ver planos",()=>navigate("plans")));
+  element("main-content").append(box);
 }
 
-function renderPlans() {
-  const box = panel("Minha assinatura");
-
-  if (isAdmin()) {
-    box.appendChild(
-      node("p", "Acesso administrativo ilimitado.")
-    );
-  } else {
-    const sub = ZYNOX.subscription;
-
-    box.append(
-      node("p", "Plano: " + (sub?.plan || "Nenhum")),
-      node("p", "Validade: " + (
-        sub?.lifetime
-          ? "Vitalício"
-          : formatDate(sub?.expires_at)
-      ))
-    );
+function renderPlans(){
+  const box=panel("Atualizar plano","Compare as vantagens, escolha o período e consulte os valores. Pagamentos ainda não estão habilitados.");
+  const current=ZYNOX.subscription?.plan?.toLowerCase()||"";
+  const currentText=isAdmin()?"Acesso administrativo ilimitado":current?"Seu plano atual: "+current.toUpperCase():"Você ainda não tem plano ativo.";
+  box.append(node("p",currentText));
+  const tiers=[
+    {key:"starter",title:"Starter",benefits:["Produtos e estoque","Vendas e relatórios","Pix manual"],prices:[4.90,8.90,14.90,39.90,129.90,199.90]},
+    {key:"pro",title:"Pro",benefits:["Tudo do Starter","Cupons e ofertas","Ferramentas de gestão"],prices:[7.90,14.90,24.90,64.90,219.90,349.90]},
+    {key:"premium",title:"Premium",benefits:["Tudo do Pro","Recursos premium conforme disponibilidade","Prioridade nas novidades"],prices:[12.90,24.90,39.90,99.90,349.90,549.90]}
+  ];
+  const periods=["7 dias","15 dias","30 dias","90 dias","1 ano","Vitalício"];
+  const grid=node("div",undefined,"plan-grid");
+  for(const tier of tiers){
+    if(tier.key===current)continue;
+    const card=node("div",undefined,"plan-card");
+    card.append(node("h3",tier.title));
+    for(const feature of tier.benefits)card.append(node("p","✓ "+feature));
+    const detail=node("div",undefined,"plan-duration");
+    card.append(button("Ver períodos e valores",()=>{
+      detail.replaceChildren(node("p","Valores provisórios — compra indisponível."));
+      for(let i=0;i<periods.length;i++)detail.append(node("p",periods[i]+" — "+money(Math.round(tier.prices[i]*100))));
+    }),detail);
+    grid.append(card);
   }
-
-  element("main-content").appendChild(box);
+  box.append(grid,node("p","As vantagens são uma apresentação comercial; recursos ainda não disponíveis não são prometidos como ativos."));
+  element("main-content").append(box);
 }
 
 // ESTATÍSTICAS ADMINISTRATIVAS
@@ -1054,11 +1062,14 @@ function navigate(page) {
     api("/api/ai/status").then(d=>status.textContent=d.message).catch(e=>status.textContent=e.message);return;
   }
   if (page === "support") {
-    const box=panel("Suporte","Abra um chamado para a equipe da ZYNOX. Não envie senhas, tokens ou dados bancários.");
-    const subject=input("Assunto"),message=node("textarea",undefined,"control-input"),status=node("p","Carregando..."),list=node("div");
-    subject.maxLength=120;message.maxLength=3000;message.placeholder="Descreva sua dúvida ou problema...";
-    async function load(){const d=await api("/api/support");list.replaceChildren();for(const t of d.items){const c=node("div",undefined,"control-item");c.append(node("h3",t.subject),node("p",t.message),node("p",t.status==="closed"?"Encerrado":"Aberto"),node("p",formatDate(t.created_at)),node("p","Protocolo: "+t.id));list.append(c);}if(!d.items.length)list.append(node("p","Nenhum chamado registrado."));status.textContent="Chamados atualizados.";}
-    box.append(field("Assunto",subject),field("Descrição",message),button("Abrir chamado",async()=>{await api("/api/support",{subject:subject.value,message:message.value});subject.value="";message.value="";await load();status.textContent="Chamado registrado.";}),status,node("h3","Meus chamados"),list,button("Atualizar",load));main.append(box);load().catch(e=>status.textContent=e.message);return;
+    const box=panel("Suporte ZYNOX","Precisa de ajuda? Entre no servidor oficial da ZYNOX e abra um ticket para falar com nossa equipe.");
+    box.append(node("p","Você também poderá entrar em contato diretamente pelo WhatsApp quando o número oficial for configurado."));
+    const discord=window.ZYNOX_SUPPORT_DISCORD_URL,whatsapp=window.ZYNOX_SUPPORT_WHATSAPP_URL;
+    for(const [label,url] of [["Entrar no Discord",discord],["Falar no WhatsApp",whatsapp]]){
+      if(url&&/^https:\/\//.test(url)){const link=node("a",label,"control-button");link.href=url;link.target="_blank";link.rel="noopener noreferrer";box.append(link);}
+      else{const b=button(label+" — aguardando link oficial",()=>{});b.disabled=true;box.append(b);}
+    }
+    main.append(box);return;
   }
 
   if (page === "notifications") {
@@ -1244,6 +1255,7 @@ async function initialize() {
 
     ZYNOX.user = data.user;
     ZYNOX.subscription = data.subscription;
+    ZYNOX.discordProfile = data.discord_profile;
 
     if (!isAdmin() && !ZYNOX.subscription) {
       window.location.replace("/plans");
