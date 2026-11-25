@@ -885,7 +885,7 @@ function navigate(page) {
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),listing=node("div"),editor=node("div");
     let data={products:[],variants:[]},generation=0;
     const add=button("+ Adicionar produto",()=>openEditor(null));add.disabled=true;
-    box.append(field("Loja",stores),add,status,editor,listing);main.append(box);
+    box.append(add,status,editor,listing);main.append(box);
     async function load(){
       const id=stores.value,version=++generation;listing.replaceChildren();editor.replaceChildren();add.disabled=!id;
       if(!id){status.textContent="Selecione a loja.";return;}
@@ -897,7 +897,7 @@ function navigate(page) {
         if(p.image_url){const img=node("img");img.src=p.image_url;img.alt="Imagem do produto";img.loading="lazy";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-width:220px;max-height:120px;object-fit:contain;border-radius:8px;";card.append(img);}
         card.append(node("h3",p.name),node("p",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status));
         for(const v of d.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2).replace(".",",")+" • Estoque: "+(v.infinite_stock?"Infinito":v.available)));
-        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}));listing.append(card);
+        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}),button("Excluir produto",async()=>{if(!confirm("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));listing.append(card);
       }if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
     }
     async function openEditor(product){
@@ -939,7 +939,7 @@ function navigate(page) {
   if (page === "payments") {
     const box=panel("Pagamentos Pix","Receba diretamente na sua conta. O Pix manual exige conferência no extrato bancário.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
-    box.append(field("Loja",stores),status,list);main.append(box);
+    box.append(status,list);main.append(box);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
       const [d,m]=await Promise.all([api("/api/commerce/overview?store="+encodeURIComponent(id)),api("/api/commerce/manual-pix?store="+encodeURIComponent(id))]);
@@ -981,7 +981,7 @@ function navigate(page) {
   if (page === "gateways") {
     const box=panel("Conectar banco / provedor","Use somente tokens de API. Nunca informe senha bancária ou código de autenticação.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
-    box.append(field("Loja",stores),status,content);main.append(box);
+    box.append(status,content);main.append(box);
     async function load(){
       const id=stores.value;content.replaceChildren();if(!id)return;
         const m=await api("/api/commerce/manual-pix?store="+encodeURIComponent(id));if(stores.value!==id)return;
@@ -1007,7 +1007,7 @@ function navigate(page) {
     const descriptions={sales:"Acompanhe os pedidos e as vendas da sua loja.",customers:"Consulte seus clientes e o histórico de compras.",coupons:"Gerencie os cupons da sua loja.",tickets:"Acompanhe os chamados registrados.",reports:"Indicadores de pedidos e vendas da loja."};
     const box=panel(pageNames[page],descriptions[page]);
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
-    box.append(field("Loja",stores),status,list);main.append(box);
+    box.append(status,list);main.append(box);
     const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
     const labels={pending:"Pendente",paid:"Vendido — entrega pendente",delivering:"Vendido — entrega em andamento",delivered:"Vendido — entregue",cancelled:"Cancelado",expired:"Expirado",open:"Aberto",closed:"Fechado"};
     const card=(title,...lines)=>{const c=node("div",undefined,"control-item");c.append(node("h3",title),...lines.map(x=>node("p",x)));return c;};
@@ -1070,7 +1070,7 @@ function navigate(page) {
   if (["settings","integrations","automations"].includes(page)) {
     const desc={settings:"Personalize os dados da sua loja.",integrations:"Confira as conexões e a disponibilidade dos serviços.",automations:"Acompanhe as entregas automáticas e a configuração de pagamentos."};
     const box=panel(pageNames[page],desc[page]),stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
-    box.append(field("Loja",stores),status,content);main.append(box);
+    box.append(status,content);main.append(box);
     const card=(title,...lines)=>{const c=node("div",undefined,"control-item");c.append(node("h3",title),...lines.map(x=>node("p",x)));return c;};
     async function load(){const id=stores.value;content.replaceChildren();if(!id)return;status.textContent="Carregando...";
       const d=await api("/api/commerce/"+page+"?store="+encodeURIComponent(id));if(stores.value!==id)return;status.textContent="Dados atualizados.";
