@@ -933,7 +933,13 @@ function navigate(page) {
         if(o.status==="pending"&&o.order_status==="pending"){
           const ref=input("ID da transação Pix (EndToEndId)"),verified=input("","checkbox");ref.maxLength=32;
           card.append(field("ID da transação no extrato",ref),field("Conferi o crédito e o valor na minha conta bancária",verified),button("Confirmar recebimento",async()=>{if(!verified.checked)throw Error("Confira o extrato primeiro.");if(!confirm("Confirma que o valor foi recebido na sua conta?"))return;await api("/api/commerce/manual-pix/confirm",{store_id:id,order_id:o.order_id,bank_reference:ref.value,verified:true});await load();}));
-        }list.append(card);
+        }
+        if(o.status==="confirmed"){
+          const deliveryLabels={paid:"Entrega pendente",delivering:"Entrega em análise — não reenvie até verificar",delivered:"Produto entregue"};
+          card.append(node("p",deliveryLabels[o.order_status]||"Status: "+o.order_status));
+          if(o.order_status==="paid")card.append(button("Reenviar produto",async()=>{const result=await api("/api/commerce/manual-pix/retry-delivery",{store_id:id,order_id:o.order_id});await load();status.textContent=result.delivery==="delivered"?"Produto entregue com sucesso.":"Entrega ainda pendente. Confira as permissões e a DM do comprador.";}));
+        }
+        list.append(card);
       }if(!m.orders.length)list.append(node("p","Nenhum pedido manual."));
       list.append(node("h3","Cobranças automáticas — ambiente de testes"));
       for(const o of d.orders.filter(o=>!m.orders.some(mo=>mo.order_id===o.id))){
