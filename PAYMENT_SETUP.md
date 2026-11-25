@@ -67,3 +67,13 @@ Configure o webhook Asaas no mesmo endpoint `/webhooks/payments`, com o token `A
 ### Proteção contra saque duplicado
 
 Antes de chamar o Asaas, a API reserva o valor como retirada pendente no livro-caixa por uma inserção condicional. Se a chamada falhar de forma inequívoca, a reserva é marcada como falha; se houver timeout ou resposta ambígua, permanece reservada e o painel do Asaas deve ser conferido. O webhook também tenta reconciliar a transferência pela referência externa. Não repita manualmente um saque em análise sem confirmar primeiro o estado no Asaas.
+
+## ZYNOX WALLET opcional por loja
+
+Cada loja pode ativar ou desativar a ZYNOX WALLET no painel. A preferência fica em `stores.wallet_enabled`. Quando ativada, pagamentos confirmados e validados geram um lançamento no extrato interno daquela loja; quando desativada, o webhook confirma o pedido normalmente, mas não credita o livro-caixa da wallet. O recurso é opt-in e isolado por loja.
+
+**Limite jurídico e operacional:** nesta implementação, a ZYNOX WALLET é somente um livro-caixa/registro de vendas e movimentações. O saldo exibido não é depósito bancário, conta de pagamento, dinheiro sob custódia da ZYNOX ou saldo automaticamente disponível para saque. A liquidação real permanece na conta do provedor de pagamento contratado pelo vendedor. Saques e transferências exigem uma instituição parceira habilitada, análise contratual e homologação; mantenha as operações reais bloqueadas até isso existir.
+
+### Migração
+
+Aplique `migrations/0003_optional_store_wallet.sql` no D1 existente antes de publicar a versão. Novas instalações já recebem a coluna por meio de `schema.sql`.
