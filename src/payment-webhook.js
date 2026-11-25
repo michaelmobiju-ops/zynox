@@ -6,18 +6,34 @@ async function decryptStock(value,variantId,secret){
  const key=await crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt:new TextEncoder().encode("zynox-stock-v1"),info:new TextEncoder().encode("encryption")},material,{name:"AES-GCM",length:256},false,["decrypt"]);
  return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:hex(ivHex),additionalData:new TextEncoder().encode(variantId)},key,hex(cipherHex)));
 }
-async function deliver(env,orderId){
- const order=await env.DB.prepare("SELECT o.*,c.discord_id,v.id variant_id,p.name product_name,v.name variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=?").bind(orderId).first();
- if(!order||order.status!=="paid"||order.delivered_at||!env.DISCORD_BOT_TOKEN||!env.STOCK_ENCRYPTION_KEY)return;
- const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.status='reserved' LIMIT 1").bind(orderId).first();
- if(!item)return;
+export async function deliver(env,orderId){
+ const order=await env.DB.prepare("SELECT o.*,c.discord_id,v.id variant_id,v.infinite_stock,p.name product_name,v.name variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=?").bind(orderId).first();
+ if(!order)return "pending";
+ if(order.status==="delivered"||order.delivered_at)return "delivered";
+ if(order.status!=="paid"||!env.DISCORD_BOT_TOKEN||!env.STOCK_ENCRYPTION_KEY)return "pending";
+ const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND s.status=? LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock?"available":"reserved").first();
+ if(!item)return "pending";
  const value=await decryptStock(item.key_encrypted,order.variant_id,env.STOCK_ENCRYPTION_KEY);
- const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({recipient_id:order.discord_id}),signal:AbortSignal.timeout(8000)});
- if(!dm.ok)return;
- const channel=await dm.json();
- const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({content:"Pagamento confirmado!\\nProduto: "+order.product_name+" — "+order.variant_name+"\\nSua key: "+value,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
- if(!sent.ok)return;
- await env.DB.batch([env.DB.prepare("UPDATE stock SET status='sold',reserved_until=NULL WHERE id=? AND status='reserved'").bind(item.id),env.DB.prepare("UPDATE orders SET delivered_at=datetime('now'),status='delivered' WHERE id=? AND status='paid' AND delivered_at IS NULL").bind(orderId)]);
+ const nonce=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(orderId))),b=>b.toString(16).padStart(2,"0")).join("").slice(0,25);
+ const lock=await env.DB.prepare("UPDATE orders SET status='delivering' WHERE id=? AND status='paid' AND delivered_at IS NULL").bind(orderId).run();
+ if(!lock.meta.changes)return "pending";
+ const release=()=>env.DB.prepare("UPDATE orders SET status='paid' WHERE id=? AND status='delivering'").bind(orderId).run();
+ const headers={Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"};
+ try{
+  const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers,body:JSON.stringify({recipient_id:order.discord_id}),signal:AbortSignal.timeout(8000)});
+  if(!dm.ok){await release();return "pending";}
+  const channel=await dm.json();
+  const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers,body:JSON.stringify({content:"Pagamento confirmado!\nProduto: "+order.product_name+" — "+order.variant_name+"\nSua key: "+value,nonce,enforce_nonce:true,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
+  if(!sent.ok){if(sent.status<500)await release();return "pending";}
+  const batch=[];
+  if(!order.infinite_stock)batch.push(env.DB.prepare("UPDATE stock SET status='sold',reserved_until=NULL WHERE id=? AND status='reserved'").bind(item.id));
+  batch.push(env.DB.prepare("UPDATE orders SET delivered_at=datetime('now'),status='delivered' WHERE id=? AND status='delivering'").bind(orderId));
+  await env.DB.batch(batch);
+  return "delivered";
+ }catch{
+  // Unknown send outcome: leave the order locked for reconciliation.
+  return "pending";
+ }
 }
 export async function paymentWebhook(request,env){
  if(request.method!=="POST")return json({error:"Method not allowed"},405);
