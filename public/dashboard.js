@@ -825,10 +825,19 @@ async function loadHomeDashboard() {
       const chart=element("sales-chart");chart.replaceChildren();
       const days=new Map(d.days.map(x=>[x.day,x]));
       const series=Array.from({length:7},(_,i)=>{const date=new Date();date.setUTCDate(date.getUTCDate()-6+i);const day=date.toISOString().slice(0,10);return {day,cents:Number(days.get(day)?.cents||0)};});
-      const max=Math.max(1,...series.map(x=>x.cents));
-      for(const item of series){const row=node("div",undefined,"home-chart-row"),label=node("span",item.day.slice(8)+"/"+item.day.slice(5,7)),track=node("div",undefined,"home-chart-track"),bar=node("div",undefined,"home-chart-bar"),value=node("span",money(item.cents));bar.style.width=(100*item.cents/max)+"%";track.append(bar);row.append(label,track,value);chart.append(row);}
+      const max=Math.max(100,...series.map(x=>x.cents));
+      const svg=(tag,attrs={})=>{const el=document.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));return el;};
+      const graph=svg("svg",{viewBox:"0 0 360 205",role:"img","aria-label":"Receita bruta dos últimos sete dias",class:"sales-line-chart"});
+      const defs=svg("defs"),gradient=svg("linearGradient",{id:"sales-fill",x1:"0",y1:"0",x2:"0",y2:"1"});gradient.append(svg("stop",{offset:"0%","stop-color":"#7135FF","stop-opacity":".45"}),svg("stop",{offset:"100%","stop-color":"#7135FF","stop-opacity":"0"}));defs.append(gradient);graph.append(defs);
+      const points=series.map((v,i)=>({x:48+i*50,y:163-137*v.cents/max,...v}));
+      for(let i=0;i<=4;i++){const y=163-i*137/4;graph.append(svg("line",{x1:48,y1:y,x2:348,y2:y,stroke:"#332B45","stroke-dasharray":"3 4"}));const t=svg("text",{x:42,y:y+3,"text-anchor":"end",fill:"#A19BAD","font-size":8});t.textContent=new Intl.NumberFormat("pt-BR",{notation:"compact",maximumFractionDigits:1}).format(max*i/400);graph.append(t);}
+      const path=points.map((p,i)=>(i?"L":"M")+p.x+" "+p.y).join(" ");
+      graph.append(svg("path",{d:path+" L348 163 L48 163 Z",fill:"url(#sales-fill)"}),svg("path",{d:path,fill:"none",stroke:"#C084FC","stroke-width":2.5,"stroke-linejoin":"round","stroke-linecap":"round"}));
+      const detail=node("p","Toque em um ponto para consultar o faturamento do dia.","chart-detail");
+      for(const p of points){const c=svg("circle",{cx:p.x,cy:p.y,r:4,fill:"#C084FC",stroke:"#15121F","stroke-width":1.5,tabindex:0,role:"button","aria-label":p.day+" — "+money(p.cents)});const t=svg("title");t.textContent=p.day+" — "+money(p.cents);c.append(t);const show=()=>detail.textContent=p.day.slice(8)+"/"+p.day.slice(5,7)+" — "+money(p.cents);c.addEventListener("click",show);c.addEventListener("focus",show);c.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")show();});graph.append(c);const label=svg("text",{x:p.x,y:181,fill:"#A19BAD","font-size":9,"text-anchor":"middle"});label.textContent=p.day.slice(8)+"/"+p.day.slice(5,7);graph.append(label);}
+      chart.append(graph,detail);
       const recent=element("recent-activities");recent.replaceChildren();
-      const labels={pending:"Pendente",paid:"Pago",delivered:"Entregue",cancelled:"Cancelado",expired:"Expirado"};
+      const labels={pending:"Pendente",paid:"Vendido — entrega pendente",delivering:"Vendido — entrega em andamento",delivered:"Vendido — entregue",cancelled:"Cancelado",expired:"Expirado"};
       for(const o of d.recent){const c=node("div",undefined,"control-item");c.append(node("strong",o.product_name+" · "+money(o.total_cents)),node("p",o.store_name+" · "+(labels[o.status]||o.status)+" · "+formatDate(o.created_at)));recent.append(c);}
       if(!d.recent.length)recent.append(node("p","Nenhum pedido registrado."));
     }catch(e){if(current===serial&&main.contains(selector))status.textContent=e.message;}
@@ -893,7 +902,7 @@ function navigate(page) {
     }
     async function openEditor(product){
       const id=stores.value;if(!id)return;
-      editor.replaceChildren();const form=node("div",undefined,"control-item");
+      editor.replaceChildren();const form=node("div",undefined,"control-item product-editor");
       editor.append(form);form.append(node("h3",product?"Editar produto":"Adicionar produto"));
       const name=input("Nome do produto"),description=node("textarea",undefined,"control-input"),image=input("https://..."),color=input("","color"),label=input("Comprar"),multiple=input("","checkbox"),channels=select([["","Selecione o canal"]]),rows=node("div"),preview=node("div",undefined,"control-item");
       name.value=product?.name||"";description.value=product?.description||"";image.value=product?.image_url||"";color.value=product?.color||"#7135FF";label.value=product?.button_text||"Comprar";multiple.checked=Boolean(product?.has_variations);channels.disabled=true;
@@ -901,7 +910,7 @@ function navigate(page) {
       for(const e of [name,description,image,color,label])e.addEventListener("input",renderPreview);renderPreview();
       const variants=[];
       function addVariant(v){
-        const n=input("Nome da variação"),price=input("Preço em reais","number"),keys=node("textarea",undefined,"control-input"),infinite=input("","checkbox"),row=node("div",undefined,"control-item");
+        const n=input("Nome da variação"),price=input("Preço em reais","number"),keys=node("textarea",undefined,"control-input"),infinite=input("","checkbox"),row=node("div",undefined,"control-item compact-variant");
         n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
         const entry={id:v?.id,n,price,keys,infinite,row};variants.push(entry);
         row.append(field("Nome da variação",n),field("Preço",price),node("p","Estoque disponível: "+(v?.infinite_stock?"Infinito":v?.available||0)),field("Adicionar keys",keys),field("Estoque infinito",infinite));
@@ -913,7 +922,11 @@ function navigate(page) {
       const addRow=button("+ Adicionar variação",()=>{if(variants.length<25)addVariant(null);});addRow.hidden=!multiple.checked;
       multiple.addEventListener("change",()=>{if(!multiple.checked&&variants.length>1){multiple.checked=true;alert("Remova as novas variações primeiro. As existentes são preservadas.");}addRow.hidden=!multiple.checked;});
       const save=button("Salvar produto",async()=>{if(!channels.value)throw Error("Selecione o canal.");await api("/api/commerce/products",{store_id:id,product_id:product?.id,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({id:v.id,name:v.n.value,price_cents:Math.round(Number(v.price.value)*100),keys:v.keys.value,infinite:v.infinite.checked}))});await load();status.textContent="Produto e estoque salvos. Publique ou atualize o anúncio quando desejar.";});
-      form.append(field("Nome",name),field("Descrição",description),field("Imagem (link HTTPS)",image),field("Cor da barra lateral",color),field("Texto do botão",label),field("Canal de vendas",channels),node("h3","Prévia do anúncio"),preview,field("Usar variações",multiple),node("h3","Preço e estoque"),rows,addRow,save,button("Cancelar",()=>editor.replaceChildren()));
+      const basic=node("div",undefined,"product-fields");basic.append(field("Nome",name),field("Canal de vendas",channels),field("Descrição",description));
+      const appearance=node("details",undefined,"product-section");appearance.append(node("summary","Aparência do anúncio"),field("Imagem (link HTTPS)",image),field("Cor da barra lateral",color),field("Texto do botão",label),preview);
+      const inventory=node("details",undefined,"product-section");inventory.open=true;inventory.append(node("summary","Preço e estoque"),field("Usar variações",multiple),rows,addRow);
+      const actions=node("div",undefined,"product-actions");actions.append(save,button("Cancelar",()=>editor.replaceChildren()));
+      form.append(basic,appearance,inventory,actions);
       form.scrollIntoView({behavior:"smooth",block:"start"});
       const result=await api("/api/store/channels?store="+encodeURIComponent(id));if(!editor.contains(form)||stores.value!==id)return;
       for(const c of result.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}channels.value=product?.channel_id||"";channels.disabled=Boolean(product?.message_id);
@@ -996,7 +1009,7 @@ function navigate(page) {
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
     box.append(field("Loja",stores),status,list);main.append(box);
     const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
-    const labels={pending:"Pendente",paid:"Pago",delivered:"Entregue",cancelled:"Cancelado",expired:"Expirado",open:"Aberto",closed:"Fechado"};
+    const labels={pending:"Pendente",paid:"Vendido — entrega pendente",delivering:"Vendido — entrega em andamento",delivered:"Vendido — entregue",cancelled:"Cancelado",expired:"Expirado",open:"Aberto",closed:"Fechado"};
     const card=(title,...lines)=>{const c=node("div",undefined,"control-item");c.append(node("h3",title),...lines.map(x=>node("p",x)));return c;};
     function metrics(items){const grid=node("div",undefined,"control-grid");for(const [label,value] of items){const c=node("div",undefined,"control-stat");c.append(node("p",label),node("h2",String(value)));grid.append(c);}return grid;}
     async function load(){
