@@ -988,6 +988,10 @@ function navigate(page) {
     const imagePreview=node("img");imagePreview.alt="Prévia da imagem";imagePreview.style.cssText="display:none;max-width:100%;max-height:240px;object-fit:contain;border-radius:12px";
     const show=()=>{preview.textContent=examples[style.value];const url=imageUrl.value.trim();imagePreview.style.display=/^(https:\/\/|\/notification-(classic|compact|premium)\.svg$)/i.test(url)?"block":"none";if(imagePreview.style.display==="block")imagePreview.src=url;};style.addEventListener("change",()=>{show();renderPresets();});imageUrl.addEventListener("input",()=>{show();renderPresets();});imageUrl.value=presetUrl(style.value);show();renderPresets();preview.style.whiteSpace="pre-line";
 
+    const editToggle=node("input");editToggle.type="checkbox";editToggle.checked=false;
+    const editToggleLabel=node("label"," Ativar edição de texto");editToggleLabel.style.cssText="display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer;margin:16px 0";editToggleLabel.prepend(editToggle);
+    const editSection=node("div");editSection.style.display="none";
+    editToggle.addEventListener("change",()=>{editSection.style.display=editToggle.checked?"block":"none";renderOverlay();});
     const editTitle=node("h3","Editar texto na imagem");
     const editText=node("textarea",undefined,"control-input");editText.rows=3;editText.value="PAGAMENTO CONFIRMADO\nProduto: {produto}\nCliente: {cliente}\nValor: {valor}";
     const editHint=node("p","Arraste o texto na prévia para posicionar. Use {produto}, {cliente} e {valor} como exemplos. Para gravar o texto na imagem, é necessário o armazenamento R2.");
@@ -1000,6 +1004,7 @@ function navigate(page) {
     const overlay=node("div");overlay.style.cssText="position:absolute;white-space:pre-line;max-width:94%;text-align:center;transform:translate(-50%,-50%);font-weight:800;text-shadow:0 2px 7px #000,0 0 3px #000;cursor:grab;touch-action:none;overflow-wrap:anywhere";
     imageStage.append(stageImage,overlay);
     const renderOverlay=()=>{
+      overlay.style.display=editToggle.checked?"block":"none";
       overlay.textContent=editText.value.replaceAll("{produto}","Gerador de Sensi").replaceAll("{cliente}","@cliente").replaceAll("{valor}","R$ 20,00");
       overlay.style.left=textX.value+"%";overlay.style.top=textY.value+"%";
       overlay.style.color=textColor.value;overlay.style.fontSize=Math.max(10,Number(textSize.value)||30)*Math.min(imageStage.clientWidth||360,540)/540+"px";
@@ -1009,13 +1014,14 @@ function navigate(page) {
     for(const control of [editText,textSize,textColor,textX,textY])control.addEventListener("input",renderOverlay);
     overlay.addEventListener("pointerdown",event=>{event.preventDefault();overlay.setPointerCapture(event.pointerId);});
     overlay.addEventListener("pointermove",event=>{
-      if(!overlay.hasPointerCapture(event.pointerId))return;
+      if(!editToggle.checked||!overlay.hasPointerCapture(event.pointerId))return;
       const rect=imageStage.getBoundingClientRect();
       textX.value=String(Math.round(Math.max(0,Math.min(100,(event.clientX-rect.left)/rect.width*100))));
       textY.value=String(Math.round(Math.max(0,Math.min(100,(event.clientY-rect.top)/rect.height*100))));
       renderOverlay();
     });
     const exportButton=button("Aplicar texto à imagem",async()=>{
+      if(!editToggle.checked)throw Error("Ative a edição de texto antes de aplicar.");
       if(!stageImage.complete||!stageImage.naturalWidth)throw Error("Aguarde a imagem carregar.");
       const canvas=document.createElement("canvas");canvas.width=stageImage.naturalWidth;canvas.height=stageImage.naturalHeight;
       const ctx=canvas.getContext("2d");ctx.drawImage(stageImage,0,0);
@@ -1037,7 +1043,8 @@ function navigate(page) {
     presets.addEventListener("click",()=>requestAnimationFrame(renderOverlay));
     imagePicker.addEventListener("change",()=>setTimeout(renderOverlay,100));
     requestAnimationFrame(renderOverlay);
-    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,editTitle,field("Texto da imagem",editText),editHint,field("Tamanho da fonte",textSize),field("Cor do texto",textColor),field("Posição horizontal",textX),field("Posição vertical",textY),imageStage,exportButton,button("Salvar notificações",async()=>{if(!channel.value)throw Error("Selecione primeiro o canal do Discord para publicar as notificações.");await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
+    editSection.append(editTitle,field("Texto da imagem",editText),editHint,field("Tamanho da fonte",textSize),field("Cor do texto",textColor),field("Posição horizontal",textX),field("Posição vertical",textY),imageStage,exportButton);
+    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),node("h3","Escolha um modelo pronto"),presets,field("Imagem ou GIF da notificação",imageUrl),uploadButton,imagePicker,uploadStatus,node("h3","Prévia da imagem da notificação"),imagePreview,editToggleLabel,editSection,button("Salvar notificações",async()=>{if(!channel.value)throw Error("Selecione primeiro o canal do Discord para publicar as notificações.");await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value,image_url:imageUrl.value.trim()});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
     Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name+(c.available?"":" (sem permissão)"),c.id);o.disabled=!c.available;channel.append(o);}if(!n.settings&&d.channels.filter(c=>c.available).length===1)channel.value=d.channels.find(c=>c.available).id;if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;imageUrl.value=n.settings.image_url||presetUrl(style.value);show();renderPresets();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar as migrações 0007 e 0010 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
