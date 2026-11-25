@@ -33,17 +33,18 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/sale-notifications"&&request.method==="GET"){
    let settings=null;
-   try{settings=await env.DB.prepare("SELECT channel_id,template,enabled FROM sale_notifications WHERE store_id=?").bind(store.id).first();}
+   try{settings=await env.DB.prepare("SELECT channel_id,template,enabled,image_url FROM sale_notifications WHERE store_id=?").bind(store.id).first();}
    catch(error){if(!String(error).includes("sale_notifications"))throw error;}
    return json({settings,migration_needed:settings===null&&!(await (async()=>{try{await env.DB.prepare("SELECT 1 FROM sale_notifications LIMIT 1").first();return true;}catch{return false;}})())});
  }
  if(path==="/api/commerce/sale-notifications"&&request.method==="POST"){
-   const channel=String(body.channel_id||""),template=String(body.template||"classic");
+   const channel=String(body.channel_id||""),template=String(body.template||"classic"),imageUrl=String(body.image_url||"").trim();
+    if(imageUrl&&(imageUrl.length>2048||!/^https:\/\/[^\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s]*)?$/i.test(imageUrl)))return fail("Use um link HTTPS direto para PNG, JPG, WEBP ou GIF.");
    if(!/^\\d{17,20}$/.test(channel)||!["classic","compact","premium"].includes(template))return fail("Canal ou modelo inválido.");
    const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
    if(!check.ok||!(await check.json()).channels?.some(c=>c.id===channel&&c.available))return fail("O bot não pode publicar neste canal.",403);
-   try{await env.DB.prepare("INSERT INTO sale_notifications(store_id,channel_id,template,enabled) VALUES(?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET channel_id=excluded.channel_id,template=excluded.template,enabled=1").bind(store.id,channel,template).run();}
-   catch(error){if(String(error).includes("sale_notifications"))return fail("Atualize o banco D1 com a migração 0007.",503);throw error;}
+   try{await env.DB.prepare("INSERT INTO sale_notifications(store_id,channel_id,template,enabled,image_url) VALUES(?,?,?,1,?) ON CONFLICT(store_id) DO UPDATE SET channel_id=excluded.channel_id,template=excluded.template,enabled=1,image_url=excluded.image_url").bind(store.id,channel,template,imageUrl||null).run();}
+   catch(error){if(String(error).includes("sale_notifications"))return fail("Atualize o banco D1 com as migrações 0007 e 0010.",503);throw error;}
    return json({success:true});
  }
  if(path==="/api/commerce/automations"&&request.method==="GET"){
