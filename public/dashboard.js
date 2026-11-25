@@ -881,6 +881,30 @@ function navigate(page) {
     return;
   }
 
+  if (page === "wallet" || page === "gateways") {
+    const box=panel(page==="wallet"?"Carteira digital":"Conectar banco / provedor","Use somente tokens de API. Nunca informe senha bancária ou código de autenticação.");
+    const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),content=node("div");
+    box.append(field("Loja",stores),status,content);main.append(box);
+    async function load(){
+      const id=stores.value;content.replaceChildren();if(!id)return;
+      if(page==="wallet"){
+        const d=await api("/api/commerce/wallet?store="+encodeURIComponent(id));
+        const money=n=>"R$ "+(Number(n||0)/100).toFixed(2).replace(".",",");
+        content.append(node("div","Saldo disponível: "+money(d.balance_cents),"control-stat"),node("p","Saques pendentes: "+money(d.pending_withdrawal_cents)),node("h3","Extrato"));
+        if(!d.transactions.length)content.append(node("p","Nenhuma movimentação registrada."));
+        for(const t of d.transactions){const c=node("div",undefined,"control-item");c.append(node("strong",t.type+" • "+money(t.amount_cents)),node("p",t.status+" • "+formatDate(t.created_at)),node("p",t.description||""));content.append(c);}
+      }else{
+        const provider=select([["mercadopago","Mercado Pago"],["asaas","Asaas — produção"],["asaas_sandbox","Asaas — sandbox"]]),token=input("Cole o token de API","password");
+        content.append(field("Provedor",provider),field("Token de API",token),button("Validar e conectar",async()=>{status.textContent="Validando credencial...";const d=await api("/api/commerce/gateways",{store_id:id,provider:provider.value,api_token:token.value});token.value="";status.textContent="Conectado: "+d.gateway.account;await load();}));
+        const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));
+        content.append(node("h3","Conexões"));for(const g of d.gateways){const c=node("div",undefined,"control-item");c.append(node("strong",g.provider),node("p",g.status+(g.is_primary?" • principal":"")));content.append(c);}
+      }
+    }
+    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
+    return;
+  }
+
   if (["sales","customers","coupons","wallet","gateways","tickets","reports","payments"].includes(page)) {
     const box=panel(pageNames[page],"Dados da loja selecionada. Pagamentos reais ainda dependem de integração.");
     const stores=select([["","Selecione a loja"]]),list=node("div"),status=node("p","Carregando lojas...");
