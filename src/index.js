@@ -88,6 +88,25 @@ export default {
 
     try {
 
+      // Discord HTTP interactions: authenticate the exact raw request.
+      if (path === "/discord/interactions") {
+        if (request.method !== "POST") return json({error:"Método não permitido."},405);
+        const signature = request.headers.get("X-Signature-Ed25519") || "";
+        const timestamp = request.headers.get("X-Signature-Timestamp") || "";
+        if (!/^[a-f0-9]{128}$/i.test(signature) || !/^\d{10}$/.test(timestamp) || Math.abs(Date.now()/1000-Number(timestamp))>300) return new Response("Unauthorized",{status:401});
+        const raw = await request.text();
+        const hex = s => Uint8Array.from(s.match(/../g), x => parseInt(x,16));
+        try {
+          const key = await crypto.subtle.importKey("raw",hex("4f1047835760316dbc1a7606e9b7364f01921970bc1ecd0dd31a43c9d11f30b1"),{name:"Ed25519"},false,["verify"]);
+          if (!await crypto.subtle.verify("Ed25519",key,hex(signature),new TextEncoder().encode(timestamp+raw))) return new Response("Unauthorized",{status:401});
+        } catch { return new Response("Unauthorized",{status:401}); }
+        let interaction;
+        try { interaction = JSON.parse(raw); } catch { return json({error:"JSON inválido."},400); }
+        if (interaction.type === 1) return json({type:1});
+        if (interaction.application_id !== env.DISCORD_CLIENT_ID) return new Response("Unauthorized",{status:401});
+        return json({type:4,data:{content:"ZYNOX: interação recebida. Sistema de vendas em desenvolvimento.",flags:64,allowed_mentions:{parse:[]}}});
+      }
+
       // LOGIN COM DISCORD
 
       if (
