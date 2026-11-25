@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08080B">
+  <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
+  <title>ZYNOX — Automação de vendas</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+
+<header class="header">
+  <a href="/" class="logo">
+    <span>Z</span>YNOX
+  </a>
+  <button class="button" onclick="openLogin()">
+    Acessar
+  </button>
+</header>
+
+<main id="landing">
+
+  <section class="hero">
+    <span class="tag">
+      O FUTURO DAS VENDAS DIGITAIS
+    </span>
+
+    <h1>
+      Sua loja. Suas regras.
+      <span>Infinitas possibilidades.</span>
+    </h1>
+
+    <p>
+      Transforme seu Discord em uma máquina de vendas.
+      Automatize pagamentos, produtos, estoques e entregas
+      em uma única plataforma.
+    </p>
+
+    <button class="button" onclick="openLogin()">
+      Começar agora
+    </button>
+
+    <a class="button secondary" href="#recursos">
+      Conhecer a plataforma
+    </a>
+
+    <div class="dashboard-preview">
+      <small>ZYNOX DASHBOARD — DEMONSTRAÇÃO</small>
+      <p>Faturamento mensal</p>
+      <h2>R$ 18.430,20</h2>
+      <span class="positive">+28,7%</span>
+
+      <svg viewBox="0 0 320 140" width="100%">
+        <defs>
+          <linearGradient id="chart" x2="0" y2="1">
+            <stop stop-color="#7135FF" stop-opacity=".6"/>
+            <stop offset="1" stop-color="#7135FF" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M0 120 L40 95 L80 105 L120 65 L160 80 L200 40 L240 55 L280 20 L320 5 V140 H0Z"
+          fill="url(#chart)"/>
+        <path d="M0 120 L40 95 L80 105 L120 65 L160 80 L200 40 L240 55 L280 20 L320 5"
+          fill="none" stroke="#C084FC" stroke-width="3"/>
+      </svg>
+    </div>
+  </section>
+
+  <section id="recursos" class="section">
+    <h2>Tudo que sua loja precisa</h2>
+    <p>Controle sua operação em um único lugar.</p>
+
+    <div class="features">
+
+      <article class="card">
+        <h3>Bot de vendas</h3>
+        <p>Automatize suas vendas diretamente no Discord.</p>
+      </article>
+
+      <article class="card">
+        <h3>Produtos personalizados</h3>
+        <p>Crie produtos únicos ou com múltiplas variações.</p>
+      </article>
+
+      <article class="card">
+        <h3>Estoque inteligente</h3>
+        <p>Gerencie chaves individuais e estoques infinitos.</p>
+      </article>
+
+      <article class="card">
+        <h3>Pagamentos Pix</h3>
+        <p>QR Code, copia e cola e confirmação automática.</p>
+      </article>
+
+      <article class="card">
+        <h3>Gateways e bancos</h3>
+        <p>Conecte provedores financeiros compatíveis.</p>
+      </article>
+
+      <article class="card">
+        <h3>Entrega automática</h3>
+        <p>Entregue produtos após a confirmação do pagamento.</p>
+      </article>
+
+      <article class="card">
+        <h3>Cupons e ofertas</h3>
+        <p>Crie campanhas e descontos personalizados.</p>
+      </article>
+
+      <article class="card">
+        <h3>Central de tickets</h3>
+        <p>Organize o atendimento aos seus clientes.</p>
+      </article>
+
+      <article class="card">
+        <h3>Relatórios completos</h3>
+        <p>Acompanhe vendas, faturamento e desempenho.</p>
+      </article>
+
+      <article class="card">
+        <h3>Multisservidores</h3>
+        <p>Gerencie diferentes servidores pelo mesmo painel.</p>
+      </article>
+
+      <article class="card">
+        <h3>ZYNOX Wallet</h3>
+        <p>Consulte saldos, recebimentos e movimentações.</p>
+      </article>
+
+      <article class="card">
+        <h3>ZYNOX AI</h3>
+        <p>Assistente inteligente para auxiliar sua operação.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="section" id="como-funciona">
+    <h2>Como funciona?</h2>
+
+    <div class="features">
+      <article class="card">
+        <h3>01 — Acesse</h3>
+        <p>Entre utilizando sua conta Discord.</p>
+      </article>
+
+      <article class="card">
+        <h3>02 — Ative</h3>
+        <p>Escolha uma assinatura ou resgate uma key.</p>
+      </article>
+
+      <article class="card">
+        <h3>03 — Configure</h3>
+        <p>Conecte seu servidor e seu provedor de pagamentos.</p>
+      </article>
+
+      <article class="card">
+        <h3>04 — Publique</h3>
+        <p>Cadastre seus produtos e publique no Discord.</p>
+      </article>
+
+      <article class="card">
+        <h3>05 — Venda</h3>
+        <p>Automatize pagamentos e entregas digitais.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" id="planos">
+    <h2>Escolha seu plano</h2>
+    <p>Uma solução para cada etapa da sua loja.</p>
+
+    <div class="features">
+
+      <article class="card plan">
+        <h3>Starter</h3>
+        <p>Para quem está começando.</p>
+        <button class="button" onclick="selectPlan('Starter')">
+          Escolher Starter
+        </button>
+      </article>
+
+      <article class="card plan featured">
+        <span class="tag">DESTAQUE</span>
+        <h3>Pro</h3>
+        <p>Para lojas em crescimento.</p>
+        <button class="button" onclick="selectPlan('Pro')">
+          Escolher Pro
+        </button>
+      </article>
+
+      <article class="card plan">
+        <h3>Premium</h3>
+        <p>Para operações mais completas.</p>
+        <button class="button" onclick="selectPlan('Premium')">
+          Escolher Premium
+        </button>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="section" id="faq">
+    <h2>Perguntas frequentes</h2>
+
+    <details>
+      <summary>O que é a ZYNOX?</summary>
+      <p>A ZYNOX é uma plataforma de gerenciamento e automação de vendas para Discord. Foi planejada para permitir a criação de produtos, gerenciamento de estoques, recebimento de pagamentos, entregas automáticas e acompanhamento de vendas em um único painel.</p>
+    </details>
+
+    <details>
+      <summary>Preciso saber programar?</summary>
+      <p>Não. A plataforma foi planejada para permitir configurações diretamente pelo painel, utilizando botões e formulários, sem precisar desenvolver seu próprio bot.</p>
+    </details>
+
+    <details>
+      <summary>Posso utilizar pelo celular?</summary>
+      <p>Sim. A interface será compatível com Android, iOS, tablets e computadores, permitindo administrar sua loja diretamente pelo navegador.</p>
+    </details>
+
+    <details>
+      <summary>Posso criar produtos com variações?</summary>
+      <p>Sim. Cada variação poderá possuir nome, preço e estoque independente. Os compradores selecionarão a opção desejada através de um menu interativo no Discord.</p>
+    </details>
+
+    <details>
+      <summary>Como funciona o estoque infinito?</summary>
+      <p>O estoque infinito permite cadastrar uma chave reutilizável para todos os compradores. No estoque normal, cada unidade comprada receberá uma chave individual.</p>
+    </details>
+
+    <details>
+      <summary>Como recebo minhas vendas?</summary>
+      <p>Os pagamentos serão processados por provedores Pix compatíveis. Após a confirmação, a venda será registrada e o produto entregue. Os recebimentos poderão ser acompanhados pela ZYNOX Wallet, conforme as condições do provedor financeiro.</p>
+    </details>
+
+    <details>
+      <summary>Posso ativar uma assinatura com key?</summary>
+      <p>Sim. Após entrar com sua conta Discord, você poderá inserir uma chave de assinatura válida. O acesso será vinculado à sua conta durante o período contratado.</p>
+    </details>
+
+    <details>
+      <summary>O bot funciona enquanto estou offline?</summary>
+      <p>O sistema foi planejado para operar continuamente, permitindo compras, pagamentos e entregas mesmo quando você estiver offline, desde que os serviços e integrações estejam disponíveis.</p>
+    </details>
+
+  </section>
+
+  <section class="section final-cta">
+    <h2>Eleve sua loja ao próximo nível.</h2>
+    <button class="button" onclick="openLogin()">
+      Começar agora
+    </button>
+  </section>
+
+</main>
+
+<section id="login" class="login-page" hidden>
+  <div class="login-card">
+    <div class="logo"><span>Z</span>YNOX</div>
+    <h2>Acesse sua conta</h2>
+
+    <button class="button discord" onclick="discordLogin()">
+      Login com Discord
+    </button>
+
+    <button class="button secondary" onclick="openAccess()">
+      Login de acesso
+    </button>
+
+    <button class="back" onclick="goHome()">
+      Voltar
+    </button>
+  </div>
+</section>
+
+<section id="access" class="login-page" hidden>
+  <div class="login-card">
+    <h2>Login de acesso</h2>
+
+    <form id="access-form">
+      <label for="username">Usuário</label>
+      <input id="username" autocomplete="username" required>
+
+      <label for="password">Senha</label>
+      <input id="password" type="password"
+        autocomplete="current-password" required>
+
+      <button class="button" type="submit">
+        Entrar
+      </button>
+    </form>
+
+    <p id="login-message" role="status"></p>
+
+    <button class="back" onclick="openLogin()">
+      Voltar
+    </button>
+  </div>
+</section>
+
+<section id="duration" class="login-page" hidden>
+  <div class="login-card">
+    <h2 id="selected-plan">Escolha a duração</h2>
+    <div id="duration-options"></div>
+    <button class="back" onclick="goHome()">
+      Voltar
+    </button>
+  </div>
+</section>
+
+<footer>
+  <div class="logo"><span>Z</span>YNOX</div>
+  <p>Automação inteligente de vendas digitais.</p>
+  <p>© 2026 ZYNOX.</p>
+</footer>
+
+</body>
+</html>
