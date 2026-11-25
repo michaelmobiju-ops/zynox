@@ -359,6 +359,16 @@ export default {
             controls_ready=false;
             stores=(await env.DB.prepare("SELECT id,name,guild_id,created_at,1 AS enabled,NULL AS enabled_since,NULL AS removed_at FROM stores WHERE owner_id=? ORDER BY name").bind(user.id).all()).results;
           }
+          if(env.DISCORD_BOT_TOKEN){
+            await Promise.all(stores.map(async store=>{
+              try{
+                const response=await fetch("https://discord.com/api/v10/guilds/"+encodeURIComponent(store.guild_id),{headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(4500)});
+                if(!response.ok)return;
+                const guild=await response.json();
+                if(guild.icon)store.icon_url="https://cdn.discordapp.com/icons/"+store.guild_id+"/"+encodeURIComponent(guild.icon)+".png?size=128";
+              }catch{}
+            }));
+          }
           return json({stores,controls_ready,bot_mode:"http",presence_supported:false});
         }
         if(path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
