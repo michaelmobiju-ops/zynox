@@ -1,3 +1,4 @@
+import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
 import {deliver} from "./payment-webhook.js";
@@ -15,6 +16,14 @@ export async function commerce(request,env,storeChannels){
  if(!store)return fail("Loja não encontrada.",404);
  const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
+ if(path==="/api/commerce/ticket-panels"){
+  if(request.method==="POST"){
+   const channel=String(body.channel_id||"");
+   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
+   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===channel&&c.available))return fail("Canal não autorizado para este servidor.",403);
+  }
+  return ticketPanelApi(request,env,store,body);
+ }
  if(path==="/api/commerce/settings"&&request.method==="GET")return json({store:{id:store.id,name:store.name,guild_id:store.guild_id}});
  if(path==="/api/commerce/settings"&&request.method==="POST"){
   const name=typeof body.name==="string"?body.name.trim():"";
