@@ -16,6 +16,7 @@ export async function ticketPanelApi(request,env,store,body){
  const title=String(body.title||"").trim(),description=String(body.description||"").trim(),mode=body.mode,channel=String(body.channel_id||"");
  const options=body.options;
  if(!title||title.length>256||description.length>4000||!["buttons","select"].includes(mode)||!/^\d{17,20}$/.test(channel)||!Array.isArray(options)||options.length<1||options.length>5||options.some(o=>!o||typeof o.label!=="string"||!o.label.trim()||o.label.length>80||!Object.hasOwn(styles,o.color)||String(o.description||"").length>100))return fail("Confira o título, canal, modo e até cinco opções de atendimento.");
+ try{await env.DB.prepare("SELECT id FROM ticket_panels LIMIT 1").first();}catch(e){if(String(e).includes("ticket_panels"))return fail("Aplique a migração 0009 no banco D1 antes de publicar.",503);throw e;}
  const previous=body.panel_id?await env.DB.prepare("SELECT * FROM ticket_panels WHERE id=? AND store_id=?").bind(String(body.panel_id),store.id).first():null;
  if(body.panel_id&&!previous)return fail("Anúncio não encontrado.",404);
  if(previous&&previous.channel_id!==channel)return fail("Para mudar de canal, crie um novo anúncio.",409);
