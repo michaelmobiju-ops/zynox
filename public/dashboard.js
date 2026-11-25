@@ -857,7 +857,26 @@ function navigate(page) {
         status.textContent="Escolha um canal disponível.";
       }catch(e){status.textContent=e.message;}
     });
-    channels.addEventListener("change",()=>{status.textContent=channels.value?"Canal selecionado. A criação e publicação de produtos será integrada na próxima etapa.":"Escolha um canal disponível.";});
+    const name=input("Nome do produto"),description=node("textarea",undefined,"control-input"),image=input("https://..."),color=input("#7135FF"),label=input("Comprar"),multiple=input("","checkbox"),rows=node("div"),listing=node("div");
+    color.value="#7135FF";label.value="Comprar";
+    const variants=[];
+    function addVariant(){const n=input("Nome da variação"),p=input("Preço em reais","number"),row=node("div",undefined,"control-item");p.min="0.01";p.step="0.01";n.value=variants.length?"":"Padrão";const v={n,p,row};variants.push(v);row.append(field("Variação",n),field("Preço",p),button("Remover",()=>{if(variants.length>1){variants.splice(variants.indexOf(v),1);row.remove();}}));rows.append(row);}
+    addVariant();
+    const add=button("Adicionar variação",()=>{if(variants.length<25)addVariant();});add.hidden=true;
+    multiple.addEventListener("change",()=>{add.hidden=!multiple.checked;if(!multiple.checked){while(variants.length>1)variants.pop().row.remove();}});
+    async function loadProducts(){const id=stores.value;listing.replaceChildren();if(!id)return;const data=await api("/api/commerce/products?store="+encodeURIComponent(id));if(stores.value!==id)return;for(const p of data.products){const card=node("div",undefined,"control-item");card.append(node("h3",p.name),node("p","Status: "+p.status));for(const v of data.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2)+" | Estoque: "+v.available));listing.append(card);}}
+    stores.addEventListener("change",()=>loadProducts().catch(e=>status.textContent=e.message));
+    box.append(field("Nome",name),field("Descrição",description),field("Imagem HTTPS",image),field("Cor",color),field("Texto do botão",label),field("Usar variações",multiple),rows,add,button("Salvar produto",async()=>{if(!stores.value||!channels.value)throw Error("Selecione loja e canal.");await api("/api/commerce/products",{store_id:stores.value,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({name:v.n.value,price_cents:Math.round(Number(v.p.value)*100)}))});status.textContent="Produto salvo como rascunho.";await loadProducts();}),node("h3","Produtos cadastrados"),listing);
+    return;
+  }
+
+  if (["sales","customers","coupons","wallet","gateways","tickets","reports","payments"].includes(page)) {
+    const box=panel(pageNames[page],"Dados da loja selecionada. Pagamentos reais ainda dependem de integração.");
+    const stores=select([["","Selecione a loja"]]),list=node("div"),status=node("p","Carregando lojas...");
+    box.append(field("Loja",stores),status,list);main.append(box);
+    async function load(){const id=stores.value;list.replaceChildren();if(!id)return;const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));if(stores.value!==id)return;const key={sales:"orders",customers:"customers",coupons:"coupons",wallet:"wallet",gateways:"gateways",tickets:"tickets",reports:"orders",payments:"orders"}[page];if(page==="coupons"){const code=input("Código"),discount=input("Desconto %","number");list.append(field("Código",code),field("Desconto",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,code:code.value,discount:Number(discount.value)});await load();}));}if(!d[key].length)list.append(node("p","Nenhum registro."));for(const item of d[key]){const card=node("div",undefined,"control-item");for(const [k,v] of Object.entries(item))if(v!==null)card.append(node("p",k+": "+String(v)));list.append(card);}}
+    stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
     return;
   }
 
