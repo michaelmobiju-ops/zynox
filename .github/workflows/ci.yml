@@ -23,3 +23,6 @@ jobs:
           done
       - name: Validate package manifest
         run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
+
+      - name: Test wallet ledger schema and balances
+        run: python3 -m unittest discover -s tests -v
