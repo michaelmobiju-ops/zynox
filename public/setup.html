@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>ZYNOX | Configuração inicial</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #08080B;
+      color: #FFFFFF;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      padding: 32px;
+      background: #15121F;
+      border: 1px solid #292438;
+      border-radius: 24px;
+    }
+
+    .logo {
+      color: #C084FC;
+      font-size: 42px;
+      font-weight: 900;
+      font-style: italic;
+      letter-spacing: -2px;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .tag {
+      color: #C084FC;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 2px;
+    }
+
+    h1 {
+      font-size: 26px;
+      margin: 15px 0;
+    }
+
+    p {
+      color: #A19BAD;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 25px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input {
+      width: 100%;
+      background: #08080B;
+      color: white;
+      border: 1px solid #292438;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #7135FF;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(
+        135deg,
+        #7135FF,
+        #9254FF
+      );
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    #message {
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .error {
+      color: #FF667D;
+    }
+
+    .success {
+      color: #4ADE80;
+    }
+
+    .notice {
+      padding: 15px;
+      margin-top: 20px;
+      background: rgba(113, 53, 255, .08);
+      border: 1px solid #292438;
+      border-radius: 12px;
+      color: #C084FC;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    a {
+      display: block;
+      margin-top: 20px;
+      color: #A19BAD;
+      text-decoration: none;
+      text-align: center;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="container">
+
+    <div class="logo">ZYNOX</div>
+
+    <span class="tag">
+      CONFIGURAÇÃO INICIAL
+    </span>
+
+    <h1>Criar conta de DONO</h1>
+
+    <p>
+      Utilize as mesmas credenciais configuradas
+      nos segredos da Cloudflare.
+    </p>
+
+    <form id="setup-form">
+
+      <label for="username">
+        Nome de usuário
+      </label>
+
+      <input
+        id="username"
+        type="text"
+        placeholder="Seu usuário"
+        autocomplete="username"
+        autocapitalize="none"
+        spellcheck="false"
+        minlength="3"
+        maxlength="40"
+        required
+      >
+
+      <label for="password">
+        Senha
+      </label>
+
+      <input
+        id="password"
+        type="password"
+        placeholder="Sua senha"
+        autocomplete="current-password"
+        minlength="12"
+        maxlength="128"
+        required
+      >
+
+      <button id="submit" type="submit">
+        Criar conta de DONO
+      </button>
+
+      <div
+        id="message"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+    </form>
+
+    <div class="notice">
+      Esta configuração pode ser realizada
+      apenas uma vez. A conta de proprietário
+      possui acesso administrativo completo.
+    </div>
+
+    <a href="/">Voltar ao início</a>
+
+  </main>
+
+  <script>
+    const form = document.getElementById(
+      "setup-form"
+    );
+
+    const button = document.getElementById(
+      "submit"
+    );
+
+    const message = document.getElementById(
+      "message"
+    );
+
+    form.addEventListener(
+      "submit",
+      async event => {
+        event.preventDefault();
+
+        if (button.disabled) return;
+
+        const username = document
+          .getElementById("username")
+          .value.trim().toLowerCase();
+
+        const password = document
+          .getElementById("password")
+          .value;
+
+        button.disabled = true;
+
+        button.textContent =
+          "Criando conta...";
+
+        message.className = "";
+
+        message.textContent =
+          "Validando credenciais...";
+
+        try {
+          const response = await fetch(
+            "/api/setup/owner",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                username,
+                password
+              })
+            }
+          );
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            message.className = "error";
+
+            message.textContent =
+              data.error ||
+              "Não foi possível criar a conta.";
+
+            return;
+          }
+
+          message.className = "success";
+
+          message.textContent =
+            "Conta de DONO criada com sucesso!";
+
+          form.reset();
+
+          setTimeout(() => {
+            window.location.replace("/");
+          }, 2000);
+
+        } catch (error) {
+          message.className = "error";
+
+          message.textContent =
+            "Erro de conexão com o servidor.";
+
+        } finally {
+          document.getElementById(
+            "password"
+          ).value = "";
+
+          button.disabled = false;
+
+          button.textContent =
+            "Criar conta de DONO";
+        }
+      }
+    );
+  </script>
+
+</body>
+</html>
