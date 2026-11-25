@@ -31,6 +31,7 @@ function paymentEnv({ amount = 25, reference = "zynox_order-1" } = {}) {
         return {
           bind(...args) {
             return {
+              sql,
               first: async () => sql.includes("SELECT pay.*") ? {
                 id: "payment-1", external_id: "pay_test_1", gateway_id: "gateway-1",
                 credentials_encrypted: env.encrypted, provider: "asaas_sandbox",
