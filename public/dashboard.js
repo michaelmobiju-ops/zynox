@@ -906,6 +906,7 @@ function navigate(page) {
         const d=await api("/api/commerce/wallet?store="+encodeURIComponent(id));
         const money=n=>"R$ "+(Number(n||0)/100).toFixed(2).replace(".",",");
         content.append(node("div","Saldo disponível: "+money(d.balance_cents),"control-stat"),node("p","Saques pendentes: "+money(d.pending_withdrawal_cents)),node("h3","Extrato"));
+        const amount=input("Valor do saque em reais","number");content.append(field("Solicitar saque",amount),button("Solicitar saque",async()=>{const cents=Math.round(Number(amount.value)*100);await api("/api/commerce/wallet/withdrawals",{store_id:id,amount_cents:cents});amount.value="";status.textContent="Solicitação registrada. O pagamento será processado manualmente.";await load();}),node("p","Solicitações ficam pendentes; transferências bancárias automáticas ainda não estão habilitadas."));
         if(!d.transactions.length)content.append(node("p","Nenhuma movimentação registrada."));
         for(const t of d.transactions){const c=node("div",undefined,"control-item");c.append(node("strong",t.type+" • "+money(t.amount_cents)),node("p",t.status+" • "+formatDate(t.created_at)),node("p",t.description||""));content.append(c);}
       }else{
