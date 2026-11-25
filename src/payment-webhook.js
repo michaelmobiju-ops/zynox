@@ -35,7 +35,7 @@ export async function paymentWebhook(request,env){
   provider="mercadopago";paymentId=String(event.data.id);
  }
  if(!paymentId)return json({received:true});
- const row=await env.DB.prepare("SELECT pay.*,g.provider,g.credentials_encrypted,o.id order_id,o.total_cents FROM payments pay JOIN gateways g ON g.id=pay.gateway_id JOIN orders o ON o.id=pay.order_id WHERE pay.external_id=? AND g.provider=?").bind(String(paymentId),provider).first();
+ const row=await env.DB.prepare("SELECT pay.*,g.provider,g.credentials_encrypted,o.id order_id,o.total_cents FROM payments pay JOIN gateways g ON g.id=pay.gateway_id JOIN orders o ON o.id=pay.order_id WHERE pay.external_id=? AND (g.provider=? OR (?='asaas' AND g.provider='asaas_sandbox'))").bind(String(paymentId),provider,provider).first();
  if(!row)return json({received:true});
  const [ivHex,cipherHex]=String(row.credentials_encrypted||"").split(":");
  if(!env.GATEWAY_ENCRYPTION_KEY||!ivHex||!cipherHex)return json({error:"Gateway configuration missing"},503);
