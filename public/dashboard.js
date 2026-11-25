@@ -839,7 +839,7 @@ function navigate(page) {
       try {
         const data = await api("/api/discord/servers");
         list.replaceChildren();
-        if (data.needsDiscord) list.append(node("p","Esta conta administrativa ainda não está vinculada ao Discord. A vinculação será implementada na próxima etapa."));
+        if (data.needsDiscord) list.append(node("p","Vincule sua conta administrativa ao Discord."),button("Vincular Discord",()=>{window.location.href="/auth/discord/link";}));
         else if (!data.servers.length) list.append(node("p","Nenhum servidor autorizado encontrado."));
         for (const server of data.servers) {
           const card = node("div",undefined,"control-item");
