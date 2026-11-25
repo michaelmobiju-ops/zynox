@@ -14,3 +14,8 @@ APP_ENV = "production"
 
 [observability]
 enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zynox-db"
+database_id = "4459b94d-2dc3-4ae6-8a2a-1d48c25097a0"
