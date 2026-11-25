@@ -144,6 +144,7 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,enabled:Boolean(enabled),mode:"ledger_only"});
  }
  if(path==="/api/commerce/wallet/withdrawals/transfer"&&request.method==="POST"){
+  if(!store.wallet_enabled)return fail("Ative a ZYNOX Wallet para esta loja primeiro.",409);
   if(env.ENABLE_SANDBOX_PAYOUTS!=="true")return fail("Saques desativados até a homologação.",503);
   const amount=Number(body.amount_cents),pixKey=String(body.pix_key||"").trim(),keyType=String(body.pix_key_type||"");
   const types=["CPF","CNPJ","EMAIL","PHONE","EVP"];
@@ -180,6 +181,7 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,withdrawal:{id,provider_transfer_id:transfer.id,amount_cents:amount,status:transfer.status||"PENDING"}},201);
  }
  if(path==="/api/commerce/wallet/withdrawals"&&request.method==="POST"){
+  if(!store.wallet_enabled)return fail("Ative a ZYNOX Wallet para esta loja primeiro.",409);
   const amount=Number(body.amount_cents);
   if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Informe um saque entre R$ 10,00 e R$ 1.000.000,00.");
   const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS amount FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
@@ -193,7 +195,7 @@ export async function commerce(request,env,storeChannels){
   const rows=await list("SELECT id,type,amount_cents,status,description,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id);
   const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS balance FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
   const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
-  return json({balance_cents:balance.balance-pending.amount,pending_withdrawal_cents:pending.amount,transactions:rows,sandbox_only:true,payouts_enabled:env.ENABLE_SANDBOX_PAYOUTS==="true"});
+  return json({enabled:Boolean(store.wallet_enabled),mode:"ledger_only",balance_cents:balance.balance-pending.amount,pending_withdrawal_cents:pending.amount,transactions:rows,sandbox_only:true,payouts_enabled:env.ENABLE_SANDBOX_PAYOUTS==="true"});
  }
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount);
