@@ -921,13 +921,45 @@ function navigate(page) {
     return;
   }
 
-  if (["sales","customers","coupons","wallet","gateways","tickets","reports","payments"].includes(page)) {
-    const box=panel(pageNames[page],"Dados da loja selecionada. Pagamentos reais ainda dependem de integração.");
-    const stores=select([["","Selecione a loja"]]),list=node("div"),status=node("p","Carregando lojas...");
+  if (["sales","customers","coupons","tickets","reports"].includes(page)) {
+    const descriptions={sales:"Acompanhe os pedidos e as vendas da sua loja.",customers:"Consulte seus clientes e o histórico de compras.",coupons:"Gerencie os cupons da sua loja.",tickets:"Acompanhe os chamados registrados.",reports:"Indicadores de pedidos e vendas da loja."};
+    const box=panel(pageNames[page],descriptions[page]);
+    const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
     box.append(field("Loja",stores),status,list);main.append(box);
-    async function load(){const id=stores.value;list.replaceChildren();if(!id)return;const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));if(stores.value!==id)return;const key={sales:"orders",customers:"customers",coupons:"coupons",wallet:"wallet",gateways:"gateways",tickets:"tickets",reports:"orders",payments:"orders"}[page];if(page==="coupons"){const code=input("Código"),discount=input("Desconto %","number");list.append(field("Código",code),field("Desconto",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,code:code.value,discount:Number(discount.value)});await load();}));}if(!d[key].length)list.append(node("p","Nenhum registro."));for(const item of d[key]){const card=node("div",undefined,"control-item");for(const [k,v] of Object.entries(item))if(v!==null)card.append(node("p",k+": "+String(v)));list.append(card);}}
+    const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
+    const labels={pending:"Pendente",paid:"Pago",delivered:"Entregue",cancelled:"Cancelado",expired:"Expirado",open:"Aberto",closed:"Fechado"};
+    const card=(title,...lines)=>{const c=node("div",undefined,"control-item");c.append(node("h3",title),...lines.map(x=>node("p",x)));return c;};
+    function metrics(items){const grid=node("div",undefined,"control-grid");for(const [label,value] of items){const c=node("div",undefined,"control-stat");c.append(node("p",label),node("h2",String(value)));grid.append(c);}return grid;}
+    async function load(){
+      const id=stores.value;list.replaceChildren();if(!id)return;
+      status.textContent="Consultando registros...";
+      const d=await api("/api/commerce/overview?store="+encodeURIComponent(id));if(stores.value!==id)return;
+      status.textContent="Dados da loja atualizados.";
+      if(page==="sales"||page==="reports"){
+        const m=d.stats;
+        list.append(metrics([["Valor bruto confirmado",money(m.sales_cents)],["Pedidos",m.orders],["Pagos ou entregues",m.paid],["Pendentes",m.pending],["Entregues",m.delivered],["Clientes",m.customers]]));
+        if(page==="reports"){list.append(node("p","Ticket médio confirmado: "+money(m.paid?m.sales_cents/m.paid:0)),node("p","Indicadores acumulados. Incluem vendas de teste, quando existentes; não representam saldo bancário nem lucro líquido."));return;}
+        const filter=select([["","Todos os status"],["pending","Pendentes"],["paid","Pagos"],["delivered","Entregues"],["cancelled","Cancelados"],["expired","Expirados"]]),search=input("Buscar produto, cliente ou pedido"),results=node("div");
+        const render=()=>{results.replaceChildren();const q=search.value.trim().toLowerCase();const items=d.orders.filter(o=>(!filter.value||o.status===filter.value)&&(!q||[o.id,o.username,o.product_name,o.variant_name].some(x=>String(x||"").toLowerCase().includes(q))));for(const o of items)results.append(card(o.product_name||"Pedido",o.variant_name||"Padrão","Cliente: "+(o.username||"—"),"Valor: "+money(o.total_cents),"Status: "+(labels[o.status]||o.status),"Data: "+formatDate(o.created_at),"ID: "+o.id));if(!items.length)results.append(node("p","Nenhum pedido encontrado."));};
+        filter.addEventListener("change",render);search.addEventListener("input",render);
+        list.append(node("h3","Últimos 100 pedidos"),field("Filtrar status",filter),field("Buscar",search),results);render();
+      }else if(page==="customers"){
+        const search=input("Buscar nome ou ID do Discord"),results=node("div");
+        list.append(metrics([["Total de clientes",d.stats.customers]]),field("Buscar cliente",search),node("p","Até 100 clientes recentes."),results);
+        const render=()=>{results.replaceChildren();const q=search.value.trim().toLowerCase();const items=d.customers.filter(c=>[c.username,c.discord_id].some(x=>String(x||"").toLowerCase().includes(q)));for(const c of items)results.append(card(c.username||"Cliente","Discord: "+c.discord_id,"Pedidos: "+c.orders,"Compras confirmadas: "+money(c.spent_cents),"Cadastro: "+formatDate(c.created_at)));if(!items.length)results.append(node("p","Nenhum cliente encontrado."));};search.addEventListener("input",render);render();
+      }else if(page==="coupons"){
+        const code=input("Ex.: PROMO10"),discount=input("Desconto %","number");discount.min="1";discount.max="100";
+        list.append(field("Código",code),field("Desconto",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,code:code.value,discount:Number(discount.value)});await load();}),node("p","Cadastro de cupons disponível. Aplicação no carrinho ainda não implementada."));
+        for(const c of d.coupons)list.append(card(c.code,"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses));
+        if(!d.coupons.length)list.append(node("p","Nenhum cupom cadastrado."));
+      }else{
+        for(const t of d.tickets)list.append(card(t.subject||"Ticket","Status: "+(labels[t.status]||t.status),"Data: "+formatDate(t.created_at),"ID: "+t.id));
+        if(!d.tickets.length)list.append(node("p","Nenhum ticket registrado."));
+        list.append(node("p","A criação automática de tickets pelo Discord ainda não está disponível."));
+      }
+    }
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
-    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent="Selecione a loja.";}).catch(e=>status.textContent=e.message);
+    api("/api/store/channels").then(d=>{for(const s of d.stores)stores.append(new Option(s.name,s.id));status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";}).catch(e=>status.textContent=e.message);
     return;
   }
 
