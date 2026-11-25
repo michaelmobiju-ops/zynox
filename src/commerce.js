@@ -92,6 +92,35 @@ export async function commerce(request,env,storeChannels){
   const customerCount=await env.DB.prepare("SELECT count(*) AS total FROM customers WHERE store_id=?").bind(store.id).first();
   return json({orders,stats:{...stats,customers:customerCount.total},customers,coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:[],gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id)});
  }
+ if(path==="/api/commerce/manual-pix"&&request.method==="GET"){
+  const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
+  const orders=await list("SELECT m.order_id,m.amount_cents,m.status,m.confirmed_at,o.status AS order_status FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
+  return json({settings,orders});
+ }
+ if(path==="/api/commerce/manual-pix"&&request.method==="POST"){
+  if(body.enabled===false){await env.DB.prepare("UPDATE manual_pix_settings SET enabled=0 WHERE store_id=?").bind(store.id).run();return json({success:true});}
+  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim();
+  const patterns={CPF:/^\d{11}$/,CNPJ:/^\d{14}$/,EMAIL:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,PHONE:/^\+55\d{10,11}$/,EVP:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i};
+  if(!["nubank","picpay","itau","other"].includes(bank)||!Object.hasOwn(patterns,type)||!patterns[type].test(key)||key.length>150||!recipient||recipient.length>100||/[\r\n]/.test(recipient))return fail("Informe banco, titular e chave Pix válidos. Use apenas dígitos no CPF/CNPJ e +55 no telefone.");
+  if(body.accept_disclosure!==true)return fail("Confirme que a chave será exibida privadamente ao comprador.");
+  await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,enabled) VALUES(?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,enabled=1").bind(store.id,bank,type,key,recipient).run();
+  return json({success:true});
+ }
+ if(path==="/api/commerce/manual-pix/confirm"&&request.method==="POST"){
+  const id=String(body.order_id||""),reference=String(body.bank_reference||"").trim();
+  if(body.verified!==true||!/^E[0-9A-Za-z]{31}$/.test(reference))return fail("Confira o crédito no extrato e informe o ID de transação Pix (EndToEndId de 32 caracteres).");
+  const row=await env.DB.prepare("SELECT m.*,o.status AS order_status,o.total_cents FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.order_id=? AND m.store_id=?").bind(id,store.id).first();
+  if(!row)return fail("Pedido Pix manual não encontrado.",404);
+  if(row.status!=="pending"||row.order_status!=="pending")return fail("Pedido já processado ou indisponível.",409);
+  if(row.amount_cents!==row.total_cents)return fail("Valor divergente.",409);
+  let result;
+  try{result=await env.DB.batch([
+   env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(user.id,reference,id,store.id,id),
+   env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
+  ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
+  if(!result[0].meta.changes)return fail("Pedido já processado.",409);
+  return json({success:true,status:"paid",delivery:"pending"});
+ }
  if(path==="/api/commerce/pix"&&request.method==="POST"){
   if(env.ENABLE_SANDBOX_PAYMENTS!=="true")return fail("Cobranças desativadas até a homologação.",503);
   const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,v.infinite_stock,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
