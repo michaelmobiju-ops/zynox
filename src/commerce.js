@@ -136,67 +136,7 @@ export async function commerce(request,env,storeChannels){
   await env.DB.prepare("INSERT INTO gateways(id,store_id,provider,credentials_encrypted,is_primary,status) VALUES(?,?,?,?,1,'connected') ON CONFLICT(id) DO UPDATE SET credentials_encrypted=excluded.credentials_encrypted,is_primary=1,status='connected'").bind(id,store.id,provider,encrypted).run();
   return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
  }
- if(path==="/api/commerce/wallet/settings"&&request.method==="GET")return json({enabled:Boolean(store.wallet_enabled),mode:"ledger_only"});
- if(path==="/api/commerce/wallet/settings"&&request.method==="POST"){
-  const enabled=body.enabled===true?1:body.enabled===false?0:null;
-  if(enabled===null)return fail("Escolha se deseja ativar ou desativar a carteira.");
-  await env.DB.prepare("UPDATE stores SET wallet_enabled=? WHERE id=? AND owner_id=?").bind(enabled,store.id,user.id).run();
-  return json({success:true,enabled:Boolean(enabled),mode:"ledger_only"});
- }
- if(path==="/api/commerce/wallet/withdrawals/transfer"&&request.method==="POST"){
-  if(!store.wallet_enabled)return fail("Ative a ZYNOX Wallet para esta loja primeiro.",409);
-  if(env.ENABLE_SANDBOX_PAYOUTS!=="true")return fail("Saques desativados até a homologação.",503);
-  const amount=Number(body.amount_cents),pixKey=String(body.pix_key||"").trim(),keyType=String(body.pix_key_type||"");
-  const types=["CPF","CNPJ","EMAIL","PHONE","EVP"];
-  if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Valor de saque inválido.");
-  if(!types.includes(keyType)||!pixKey||pixKey.length>200)return fail("Informe uma chave Pix e o tipo válido.");
-  if((keyType==="CPF"&&!/^\d{11}$/.test(pixKey))||(keyType==="CNPJ"&&!/^\d{14}$/.test(pixKey))||(keyType==="PHONE"&&!/^\d{11}$/.test(pixKey))||(keyType==="EMAIL"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pixKey)))return fail("Formato da chave Pix inválido.");
-  const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected' AND provider='asaas_sandbox'").bind(store.id).first();
-  if(!gateway)return fail("Somente Asaas Sandbox está autorizado nesta fase.",409);
-  if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Chave de criptografia não configurada.",503);
-  const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
-  const hex=h=>Uint8Array.from(String(h).match(/../g)||[],x=>parseInt(x,16));
-  let token;try{const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.GATEWAY_ENCRYPTION_KEY),"AES-GCM",false,["decrypt"]);token=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:hex(ivHex)},key,hex(cipherHex)));}catch{return fail("Credencial Asaas inválida.",500);}
-  const base="https://api-sandbox.asaas.com/v3",headers={"access_token":token,"Content-Type":"application/json"};
-  const id=crypto.randomUUID(),externalReference="zynox_withdrawal_"+id;
-  const reserve=await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) SELECT ?,?,'withdrawal',?,?,'pending','Saque Pix reservado — aguardando confirmação do Asaas' WHERE ? <= (SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status IN ('completed','pending') THEN -amount_cents ELSE 0 END),0) FROM wallet_transactions WHERE store_id=?)").bind(id,store.id,amount,"withdrawal_request:"+id,amount,store.id).run();
-  if(!reserve.meta.changes)return fail("Saldo disponível insuficiente ou já reservado por outro saque.",409);
-  let transferRes;
-  try{
-   transferRes=await fetch(base+"/transfers",{method:"POST",headers:{...headers,"X-Idempotency-Key":id},body:JSON.stringify({value:amount/100,pixAddressKey:pixKey,pixAddressKeyType:keyType,operationType:"PIX",description:"Saque Pix carteira ZYNOX",externalReference}),signal:AbortSignal.timeout(15000)});
-  }catch{
-   await env.DB.prepare("UPDATE wallet_transactions SET description='Saque em análise — resposta do Asaas não confirmada; não repetir manualmente' WHERE id=?").bind(id).run();
-   return fail("Não foi possível confirmar a resposta do Asaas. O valor ficou reservado; verifique o painel do Asaas antes de tentar novamente.",502);
-  }
-  if(!transferRes.ok){
-   await env.DB.prepare("UPDATE wallet_transactions SET status='failed',description='Asaas recusou a transferência Pix' WHERE id=? AND status='pending'").bind(id).run();
-   return fail("Asaas recusou a transferência. A reserva foi cancelada.",502);
-  }
-  const transfer=await transferRes.json();
-  if(!transfer.id){
-   await env.DB.prepare("UPDATE wallet_transactions SET description='Saque em análise — Asaas não retornou ID; conferir manualmente' WHERE id=?").bind(id).run();
-   return fail("Asaas não retornou o identificador. O valor ficou reservado para conferência.",502);
-  }
-  await env.DB.prepare("UPDATE wallet_transactions SET external_reference=?,status=?,description=? WHERE id=?").bind("asaas_transfer:"+transfer.id,["DONE","CONFIRMED"].includes(transfer.status)?"completed":"pending","Saque Pix Asaas — "+String(transfer.status||"PENDING"),id).run();
-  return json({success:true,withdrawal:{id,provider_transfer_id:transfer.id,amount_cents:amount,status:transfer.status||"PENDING"}},201);
- }
- if(path==="/api/commerce/wallet/withdrawals"&&request.method==="POST"){
-  if(!store.wallet_enabled)return fail("Ative a ZYNOX Wallet para esta loja primeiro.",409);
-  const amount=Number(body.amount_cents);
-  if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Informe um saque entre R$ 10,00 e R$ 1.000.000,00.");
-  const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS amount FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
-  const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
-  if(balance.amount-pending.amount<amount)return fail("Saldo disponível insuficiente.",409);
-  const id=crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO wallet_transactions(id,store_id,type,amount_cents,external_reference,status,description) VALUES(?,?,'withdrawal',?,?,'pending','Solicitação de saque — aguardando processamento manual')").bind(id,store.id,amount,"withdrawal:"+id).run();
-  return json({success:true,withdrawal:{id,amount_cents:amount,status:"pending"}},201);
- }
- if(path==="/api/commerce/wallet"&&request.method==="GET"){
-  const rows=await list("SELECT id,type,amount_cents,status,description,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id);
-  const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS balance FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
-  const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
-  return json({enabled:Boolean(store.wallet_enabled),mode:"ledger_only",balance_cents:balance.balance-pending.amount,pending_withdrawal_cents:pending.amount,transactions:rows,sandbox_only:true,payouts_enabled:env.ENABLE_SANDBOX_PAYOUTS==="true"});
- }
+ if(path==="/api/commerce/wallet"||path.startsWith("/api/commerce/wallet/"))return fail("EM BREVE !",503);
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount);
   if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100)return fail("Cupom inválido.");
