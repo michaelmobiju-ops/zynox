@@ -844,6 +844,14 @@ function navigate(page) {
         for (const server of data.servers) {
           const card = node("div",undefined,"control-item");
           card.append(node("h3",server.name),node("p",server.linked?"Loja vinculada":"Disponível para vinculação"));
+          if (!server.linked) {
+            const name = input("Nome da loja");
+            name.value = server.name;
+            card.append(field("Nome da loja",name),button("Vincular loja",async()=>{
+              await api("/api/discord/store/link",{guild_id:server.id,name:name.value.trim()});
+              await load();
+            }));
+          }
           list.append(card);
         }
         if (data.limited) list.append(node("p","Consulta inicial limitada a 20 servidores."));
