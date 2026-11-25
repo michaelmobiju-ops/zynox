@@ -527,13 +527,15 @@ export async function handleControl(request, env) {
     if(!target)return json({error:"Administrador não encontrado."},404);
     const linked=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM stores WHERE owner_id=?) AS stores,(SELECT COUNT(*) FROM licenses WHERE created_by=? OR redeemed_by=?) AS licenses,(SELECT COUNT(*) FROM subscriptions WHERE user_id=?) AS subscriptions").bind(id,id,id,id).first();
     if(linked.stores||linked.licenses||linked.subscriptions)return json({error:"Este administrador possui dados vinculados. Suspenda a conta e transfira/remova os registros antes de excluir."},409);
+    try{const support=await env.DB.prepare("SELECT id FROM support_requests WHERE user_id=? LIMIT 1").bind(id).first();if(support)return json({error:"Este administrador possui solicitações de suporte. Suspenda a conta para preservar o histórico."},409);}catch(error){if(!String(error).includes("support_requests"))throw error;}
     const result=await env.DB.batch([
       env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+      env.DB.prepare("DELETE FROM notifications WHERE user_id=?").bind(id),
       env.DB.prepare("UPDATE audit_logs SET user_id=NULL WHERE user_id=?").bind(id),
       env.DB.prepare("DELETE FROM users WHERE id=? AND role='admin'").bind(id),
       env.DB.prepare("INSERT INTO audit_logs(id,user_id,action,details) VALUES(?,?,?,?)").bind(crypto.randomUUID(),user.id,"ADMIN_DELETED",JSON.stringify({id,username:target.username}))
     ]);
-    if(!result[2].meta.changes)return json({error:"Administrador não encontrado."},404);
+    if(!result[3].meta.changes)return json({error:"Administrador não encontrado."},404);
     return json({success:true});
   }
 
