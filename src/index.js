@@ -351,8 +351,15 @@ export default {
         const user=await getSession(request,env);
         if(!user||!user.discord_id||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
         if(path==="/api/server-controls"&&request.method==="GET"){
-          const stores=(await env.DB.prepare("SELECT s.id,s.name,s.guild_id,s.created_at,COALESCE(c.enabled,1) AS enabled,c.enabled_since,c.removed_at FROM stores s LEFT JOIN server_controls c ON c.store_id=s.id WHERE s.owner_id=? ORDER BY s.name").bind(user.id).all()).results;
-          return json({stores,bot_mode:"http",presence_supported:false});
+          let stores,controls_ready=true;
+          try{
+            stores=(await env.DB.prepare("SELECT s.id,s.name,s.guild_id,s.created_at,COALESCE(c.enabled,1) AS enabled,c.enabled_since,c.removed_at FROM stores s LEFT JOIN server_controls c ON c.store_id=s.id WHERE s.owner_id=? ORDER BY s.name").bind(user.id).all()).results;
+          }catch(error){
+            if(!/no such table:\\s*server_controls/i.test(String(error)))throw error;
+            controls_ready=false;
+            stores=(await env.DB.prepare("SELECT id,name,guild_id,created_at,1 AS enabled,NULL AS enabled_since,NULL AS removed_at FROM stores WHERE owner_id=? ORDER BY name").bind(user.id).all()).results;
+          }
+          return json({stores,controls_ready,bot_mode:"http",presence_supported:false});
         }
         if(path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
         let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
