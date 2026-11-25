@@ -9,6 +9,14 @@ import {
   handleLicenses
 } from "./licenses.js";
 
+import {
+  adminLogin
+} from "./admin-auth.js";
+
+import {
+  setupOwner
+} from "./owner.js";
+
 const privateHeaders = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
@@ -99,6 +107,18 @@ export default {
         return await discordCallback(request, env);
       }
 
+      // LOGIN ADMINISTRATIVO
+
+      if (path === "/api/auth/admin") {
+        return await adminLogin(request, env);
+      }
+
+      // CONFIGURAÇÃO INICIAL DO DONO
+
+      if (path === "/api/setup/owner") {
+        return await setupOwner(request, env);
+      }
+
       // ENCERRAR SESSÃO
 
       if (path === "/auth/logout") {
@@ -163,7 +183,7 @@ export default {
           name: "ZYNOX",
           status: "online",
           database: "connected",
-          version: "1.3.0"
+          version: "1.4.0"
         });
       }
 
@@ -172,6 +192,7 @@ export default {
       if (path === "/api/config") {
         return json({
           name: "ZYNOX",
+
           description:
             "Automação de vendas para Discord",
 
@@ -188,7 +209,7 @@ export default {
             discord: false,
             discordLogin: true,
             licenses: true,
-            adminLogin: false,
+            adminLogin: true,
             wallet: false,
             artificialIntelligence: false
           }
@@ -287,7 +308,10 @@ export default {
 
       // ROTAS INEXISTENTES
 
-      if (path.startsWith("/api/")) {
+      if (
+        path.startsWith("/api/") ||
+        path.startsWith("/auth/")
+      ) {
         return json({
           error: "Rota não encontrada."
         }, 404);
