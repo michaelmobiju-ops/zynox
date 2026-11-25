@@ -23,7 +23,6 @@ const pageNames = {
   reports: "Relatórios",
   integrations: "Integrações",
   plans: "Planos",
-  licenses: "Licenças",
   notifications: "Notificações",
   settings: "Configurações",
   support: "Suporte",
@@ -32,6 +31,14 @@ const pageNames = {
 };
 
 let homeContent = "";
+const money = n => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
+function toast(message,success=false){
+  let host=element("zynox-toasts");if(!host){host=node("div");host.id="zynox-toasts";document.body.append(host);}
+  const item=node("div",String(message||"Erro desconhecido"),"zynox-toast"+(success?" success":""));host.append(item);
+  setTimeout(()=>item.remove(),7000);
+}
+window.alert=message=>toast(message);
+window.confirm=message=>{toast("Confirmação necessária: "+message);return false;};
 
 function element(id) {
   return document.getElementById(id);
@@ -210,7 +217,7 @@ function updateProfile() {
       : ZYNOX.subscription?.plan?.toUpperCase()
         || "SEM PLANO";
 
-  if(element("selected-server"))element("selected-server").textContent=ZYNOX.store?.name||"Selecionar servidor";
+  if(element("selected-server"))element("selected-server").textContent="Servidores";
   if (element("username")) {
     element("username").textContent = user.username;
   }
@@ -245,7 +252,7 @@ function renderAccount(){
   for(const [label,value] of [["Usuário",ZYNOX.user.username],["ID da conta",ZYNOX.user.id],["Cargo",ZYNOX.user.role==="owner"?"Proprietário":ZYNOX.user.role==="admin"?"Administrador":"Assinante"],["Plano",isAdmin()?"Acesso administrativo ilimitado":sub?.plan?.toUpperCase()||"Sem plano"],["Validade",isAdmin()?"Ilimitada":sub?.lifetime?"Vitalícia":formatDate(sub?.expires_at)],["Discord ID",ZYNOX.user.discord_id||"Não vinculado"],["Situação da conta",ZYNOX.user.status||"Ativa"]]){
     const item=node("div",undefined,"account-detail");item.append(node("span",label),node("strong",value));details.append(item);
   }
-  box.append(hero,details,button("Ver planos",()=>navigate("plans")));
+  box.append(hero,details,button("Atualizar plano",()=>navigate("plans")));
   element("main-content").append(box);
 }
 
@@ -746,7 +753,6 @@ async function renderControl(tab = "stats") {
 
   if (isOwner()) {
     tabs.push(
-      ["licenses", "Licenças"],
       ["admins", "Administradores"],
       ["logs", "Histórico"]
     );
@@ -784,9 +790,6 @@ async function renderControl(tab = "stats") {
       await controlUsers(content);
     }
 
-    if (tab === "licenses") {
-      await controlLicenses(content);
-    }
 
     if (tab === "admins") {
       await controlAdmins(content);
@@ -844,7 +847,7 @@ async function loadHomeDashboard() {
       const detail=node("p","Toque em um ponto para consultar o faturamento do dia.","chart-detail");
       for(const p of points){const c=svg("circle",{cx:p.x,cy:p.y,r:4,fill:"#C084FC",stroke:"#15121F","stroke-width":1.5,tabindex:0,role:"button","aria-label":p.day+" — "+money(p.cents)});const t=svg("title");t.textContent=p.day+" — "+money(p.cents);c.append(t);const show=()=>detail.textContent=p.day.slice(8)+"/"+p.day.slice(5,7)+" — "+money(p.cents);c.addEventListener("click",show);c.addEventListener("focus",show);c.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")show();});graph.append(c);const label=svg("text",{x:p.x,y:181,fill:"#A19BAD","font-size":9,"text-anchor":"middle"});label.textContent=p.day.slice(8)+"/"+p.day.slice(5,7);graph.append(label);}
       chart.append(graph,detail);
-      const recent=element("recent-activities");recent.replaceChildren();
+      const recent=element("recent-activities");if(!recent)return;recent.replaceChildren();
       const labels={pending:"Pendente",paid:"Vendido — entrega pendente",delivering:"Vendido — entrega em andamento",delivered:"Vendido — entregue",cancelled:"Cancelado",expired:"Expirado"};
       for(const o of d.recent){const c=node("div",undefined,"control-item");c.append(node("strong",o.product_name+" · "+money(o.total_cents)),node("p",o.store_name+" · "+(labels[o.status]||o.status)+" · "+formatDate(o.created_at)));recent.append(c);}
       if(!d.recent.length)recent.append(node("p","Nenhum pedido registrado."));
@@ -862,6 +865,7 @@ function navigate(page) {
   if (page === "control" && !isAdmin()) return;
 
   ZYNOX.currentPage = page;
+  try{sessionStorage.setItem("zynox:last-page",page);}catch{}
   document.body.classList.toggle("server-selection-mode",page==="servers");
   closeMenu();
 
@@ -1302,7 +1306,8 @@ async function initialize() {
     if (element("app")) {
       element("app").hidden = false;
     }
-    navigate("servers");
+    let savedPage="servers";try{savedPage=sessionStorage.getItem("zynox:last-page")||"servers";}catch{}
+    navigate(pageNames[savedPage]?savedPage:"servers");
 
   } catch (error) {
     const loading = element("loading");
