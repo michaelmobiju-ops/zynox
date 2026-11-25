@@ -75,6 +75,7 @@ export async function commerce(request,env,storeChannels){
   return json({orders,customers:await list("SELECT discord_id,username,created_at FROM customers WHERE store_id=? LIMIT 100",store.id),coupons:await list("SELECT * FROM coupons WHERE store_id=?",store.id),wallet:await list("SELECT type,amount_cents,status,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id),gateways:await list("SELECT id,provider,status,is_primary FROM gateways WHERE store_id=?",store.id),tickets:await list("SELECT id,subject,status,created_at FROM tickets WHERE store_id=? LIMIT 100",store.id)});
  }
  if(path==="/api/commerce/pix"&&request.method==="POST"){
+  if(env.ENABLE_SANDBOX_PAYMENTS!=="true")return fail("Cobranças desativadas até a homologação.",503);
   const order=await env.DB.prepare("SELECT o.*,v.name AS variant_name,v.infinite_stock,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.store_id=? AND o.status='pending'").bind(String(body.order_id||""),store.id).first();
   if(!order)return fail("Pedido pendente não encontrado.",404);
   if(order.infinite_stock)return fail("Entrega automática de estoque infinito ainda não está disponível.",409);
@@ -84,6 +85,7 @@ export async function commerce(request,env,storeChannels){
   if(buyerName.length<2||buyerName.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return fail("Informe nome e e-mail válidos para gerar o Pix.");
   const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected'").bind(store.id).first();
   if(!gateway)return fail("Conecte um provedor de pagamento primeiro.",409);
+  if(gateway.provider!=="asaas_sandbox")return fail("Nesta fase, apenas cobranças Asaas Sandbox são permitidas.",409);
   if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Chave de criptografia não configurada.",503);
   const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
   if(!ivHex||!cipherHex)return fail("Credencial armazenada inválida.",500);
@@ -135,13 +137,14 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,gateway:{id,provider,status:"connected",account:raw.nickname||raw.name||raw.email||"Conta verificada"}},201);
  }
  if(path==="/api/commerce/wallet/withdrawals/transfer"&&request.method==="POST"){
+  if(env.ENABLE_SANDBOX_PAYOUTS!=="true")return fail("Saques desativados até a homologação.",503);
   const amount=Number(body.amount_cents),pixKey=String(body.pix_key||"").trim(),keyType=String(body.pix_key_type||"");
   const types=["CPF","CNPJ","EMAIL","PHONE","EVP"];
   if(!Number.isSafeInteger(amount)||amount<1000||amount>100000000)return fail("Valor de saque inválido.");
   if(!types.includes(keyType)||!pixKey||pixKey.length>200)return fail("Informe uma chave Pix e o tipo válido.");
   if((keyType==="CPF"&&!/^\d{11}$/.test(pixKey))||(keyType==="CNPJ"&&!/^\d{14}$/.test(pixKey))||(keyType==="PHONE"&&!/^\d{11}$/.test(pixKey))||(keyType==="EMAIL"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pixKey)))return fail("Formato da chave Pix inválido.");
-  const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected' AND provider IN ('asaas','asaas_sandbox')").bind(store.id).first();
-  if(!gateway)return fail("Conecte Asaas ou Asaas Sandbox antes de solicitar Pix.",409);
+  const gateway=await env.DB.prepare("SELECT * FROM gateways WHERE store_id=? AND is_primary=1 AND status='connected' AND provider='asaas_sandbox'").bind(store.id).first();
+  if(!gateway)return fail("Somente Asaas Sandbox está autorizado nesta fase.",409);
   if(!env.GATEWAY_ENCRYPTION_KEY||env.GATEWAY_ENCRYPTION_KEY.length<32)return fail("Chave de criptografia não configurada.",503);
   const [ivHex,cipherHex]=String(gateway.credentials_encrypted||"").split(":");
   const hex=h=>Uint8Array.from(String(h).match(/../g)||[],x=>parseInt(x,16));
@@ -175,7 +178,7 @@ export async function commerce(request,env,storeChannels){
   const rows=await list("SELECT id,type,amount_cents,status,description,created_at FROM wallet_transactions WHERE store_id=? ORDER BY created_at DESC LIMIT 100",store.id);
   const balance=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('sale','deposit','refund') AND status='completed' THEN amount_cents WHEN type IN ('withdrawal','fee') AND status='completed' THEN -amount_cents ELSE 0 END),0) AS balance FROM wallet_transactions WHERE store_id=?").bind(store.id).first();
   const pending=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM wallet_transactions WHERE store_id=? AND type='withdrawal' AND status='pending'").bind(store.id).first();
-  return json({balance_cents:balance.balance,pending_withdrawal_cents:pending.amount,transactions:rows});
+  return json({balance_cents:balance.balance-pending.amount,pending_withdrawal_cents:pending.amount,transactions:rows,sandbox_only:true,payouts_enabled:env.ENABLE_SANDBOX_PAYOUTS==="true"});
  }
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount);
