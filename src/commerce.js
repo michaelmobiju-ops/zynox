@@ -29,7 +29,7 @@ export async function commerce(request,env,storeChannels){
   const gateways=await list("SELECT provider,status,is_primary FROM gateways WHERE store_id=?",store.id);
   return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(env.DISCORD_BOT_TOKEN)},gateways,features:{wallet:false,ai:false,real_payments:false}});
  }
- if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
+ if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
  if(path==="/api/commerce/products"&&request.method==="POST"){
   const name=String(body.name||"").trim(),description=String(body.description||""),image=String(body.image_url||""),color=String(body.color||"#7135FF"),button=String(body.button_text||"Comprar"),channel=String(body.channel_id||"");
   const variants=body.variants;
@@ -68,6 +68,18 @@ export async function commerce(request,env,storeChannels){
   await env.DB.batch(statements);
   return json({success:true,id},existing?200:201);
  }
+ if(path==="/api/commerce/products/delete"&&request.method==="POST"){
+   const id=String(body.product_id||"");
+   const p=await env.DB.prepare("SELECT id,channel_id,message_id,status FROM products WHERE id=? AND store_id=?").bind(id,store.id).first();
+   if(!p)return fail("Produto não encontrado.",404);
+   if(p.status==="archived")return json({success:true});
+   if(p.message_id){
+    const response=await call("/channels/"+p.channel_id+"/messages/"+p.message_id,{method:"DELETE"});
+    if(!response.ok&&response.status!==404)return fail("Não foi possível remover o anúncio do Discord. Confira as permissões do bot.",502);
+   }
+   await env.DB.prepare("UPDATE products SET status='archived',message_id=NULL WHERE id=? AND store_id=?").bind(id,store.id).run();
+   return json({success:true,archived:true});
+  }
  if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
   if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
   const v=await env.DB.prepare("SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
