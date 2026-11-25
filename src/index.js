@@ -104,7 +104,15 @@ export default {
         try { interaction = JSON.parse(raw); } catch { return json({error:"JSON inválido."},400); }
         if (interaction.type === 1) return json({type:1});
         if (interaction.application_id !== env.DISCORD_CLIENT_ID) return new Response("Unauthorized",{status:401});
-        return json({type:4,data:{content:"ZYNOX: interação recebida. Sistema de vendas em desenvolvimento.",flags:64,allowed_mentions:{parse:[]}}});
+        const replies = {
+          ping: "🏓 Pong! ZYNOX está respondendo.",
+          zynox: "ZYNOX — plataforma de automação de vendas para Discord.",
+          painel: "Acesse seu painel: https://zynox.michael-mobiju.workers.dev/dashboard",
+          ajuda: "Comandos disponíveis: /ping, /zynox, /painel e /ajuda."
+        };
+        const name = interaction.data?.name;
+        const content = interaction.type === 2 && Object.hasOwn(replies,name) ? replies[name] : "Interação ainda não disponível.";
+        return json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
       }
 
       // LOGIN COM DISCORD
@@ -261,6 +269,29 @@ export default {
         } catch {
           return json({connected:false,error:"Discord indisponível."},502);
         }
+      }
+
+      if (path === "/api/owner/discord/commands") {
+        if (request.method !== "POST") return json({error:"Método não permitido."},405);
+        if (request.headers.get("Origin") !== url.origin) return json({error:"Acesso negado."},403);
+        const user = await getSession(request,env);
+        if (!user || user.role !== "owner") return json({error:"Acesso restrito."},403);
+        if (!env.DISCORD_BOT_TOKEN) return json({error:"Token não configurado."},503);
+        const commands = [
+          {name:"ping",description:"Testar a conexão da ZYNOX"},
+          {name:"zynox",description:"Conhecer a plataforma ZYNOX"},
+          {name:"painel",description:"Acessar o painel da ZYNOX"},
+          {name:"ajuda",description:"Consultar os comandos disponíveis"}
+        ];
+        const headers = {Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"};
+        const base = "https://discord.com/api/v10/applications/"+env.DISCORD_CLIENT_ID+"/commands";
+        const registered = [];
+        for (const command of commands) {
+          const response = await fetch(base,{method:"POST",headers,body:JSON.stringify(command),signal:AbortSignal.timeout(8000)});
+          if (!response.ok) return json({error:"Falha ao registrar /"+command.name,registered,discordStatus:response.status},502);
+          registered.push(command.name);
+        }
+        return json({success:true,registered});
       }
 
       // STATUS DO SERVIDOR
