@@ -8,6 +8,7 @@ import {
 import { handleLicenses } from "./licenses.js";
 import { adminLogin } from "./admin-auth.js";
 import { handleControl } from "./control.js";
+import { setupOwner } from "./owner.js";
 
 const privateHeaders = {
   "Cache-Control": "no-store",
@@ -109,17 +110,52 @@ export default {
         return await adminLogin(request, env);
       }
 
-      // CONFIGURAÇÃO INICIAL DESATIVADA
+      // CRIAÇÃO DA CONTA DONO
+
+      if (path === "/api/setup/owner") {
+        return await setupOwner(request, env);
+      }
+
+      // PÁGINA TEMPORÁRIA DE CADASTRO
 
       if (
-        path === "/api/setup/owner" ||
         path === "/setup" ||
         path === "/setup/" ||
         path === "/setup.html"
       ) {
-        return json({
-          error: "Configuração inicial desativada."
-        }, 404);
+        if (request.method !== "GET") {
+          return json({
+            error: "Método não permitido."
+          }, 405);
+        }
+
+        const owner = await env.DB.prepare(`
+          SELECT id
+          FROM users
+          WHERE role = 'owner'
+          LIMIT 1
+        `).first();
+
+        if (owner) {
+          return redirect("/");
+        }
+
+        if (
+          !env.OWNER_USERNAME ||
+          !env.OWNER_PASSWORD ||
+          !env.PASSWORD_PEPPER ||
+          !env.LOGIN_RATE_LIMITER
+        ) {
+          return json({
+            error: "Configuração inicial indisponível."
+          }, 503);
+        }
+
+        return await servePage(
+          request,
+          env,
+          "/setup"
+        );
       }
 
       // ENCERRAR SESSÃO
@@ -198,7 +234,7 @@ export default {
           name: "ZYNOX",
           status: "online",
           database: "connected",
-          version: "1.5.0"
+          version: "1.5.1"
         });
       }
 
