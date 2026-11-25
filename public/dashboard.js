@@ -1111,6 +1111,9 @@ function navigate(page) {
         const card=node("article",undefined,"server-card");
         const badge=node("span",server.enabled?"● Ativo":"● Pausado","server-status"+(server.enabled?"":" is-paused"));
         const icon=node("div",server.name?.slice(0,2).toUpperCase()||"ZY","server-avatar");
+        if(server.icon_url){
+          const img=node("img");img.src=server.icon_url;img.alt="Ícone do servidor "+server.name;img.loading="lazy";img.referrerPolicy="no-referrer";img.addEventListener("error",()=>img.remove());icon.append(img);
+        }
         const top=node("div",undefined,"server-card-top");top.append(icon,badge);
         card.append(top,node("h2",server.name),node("p","Servidor conectado ao Discord"),node("p",server.enabled_since?"Ativo desde "+formatDate(server.enabled_since):"Adicionado em "+formatDate(server.created_at),"server-date"));
         const controls=node("div",undefined,"server-card-actions");
