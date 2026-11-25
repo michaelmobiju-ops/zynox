@@ -5,7 +5,7 @@ import { paymentWebhook } from "../src/payment-webhook.js";
 
 const originalFetch = globalThis.fetch;
 const originalCrypto = globalThis.crypto;
-const secret = "test-gateway-encryption-key-32chars";
+const secret = "0123456789abcdef0123456789abcdef";
 async function encryptedToken(token) {
   const iv = webcrypto.getRandomValues(new Uint8Array(12));
   const key = await webcrypto.subtle.importKey("raw", new TextEncoder().encode(secret), "AES-GCM", false, ["encrypt"]);
