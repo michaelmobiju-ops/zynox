@@ -945,9 +945,20 @@ function navigate(page) {
   }
 
   if (page === "payments") {
-    const box=panel("Pagamentos Pix","Receba diretamente na sua conta. O Pix manual exige conferência no extrato bancário.");
+    const box=panel("Notificações de vendas","Escolha onde e como as compras confirmadas serão anunciadas no Discord.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),list=node("div");
-    box.append(status,list);main.append(box);
+    const config=node("div",undefined,"sale-config");
+    const manual=node("details",undefined,"product-section");manual.append(node("summary","Conferir pagamentos Pix manual"),list);
+    box.append(config,status,manual);main.append(box);
+    const channel=select([["","Selecione o canal"]]),style=select([["classic","Clássico"],["compact","Compacto"],["premium","Premium"]]),preview=node("div",undefined,"control-item"),settingsStatus=node("p","Carregando canais...");
+    const examples={
+      classic:"🎉 Nova venda confirmada!\nProduto: Gerador de Sensi\nComprador: @cliente\nValor: R$ 20,00",
+      compact:"💜 Venda realizada\n@cliente comprou Gerador de Sensi por R$ 20,00.",
+      premium:"✦ ZYNOX • VENDA APROVADA\n🛍️ Gerador de Sensi\n👤 @cliente\n💰 Receita bruta: R$ 20,00"
+    };
+    const show=()=>preview.textContent=examples[style.value];style.addEventListener("change",show);show();preview.style.whiteSpace="pre-line";
+    config.append(node("h3","Canal de confirmação de compras"),field("Canal do Discord",channel),field("Modelo da mensagem",style),node("h3","Prévia do anúncio"),preview,button("Salvar notificações",async()=>{await api("/api/commerce/sale-notifications",{store_id:ZYNOX.store.id,channel_id:channel.value,template:style.value});settingsStatus.textContent="Canal e modelo salvos."; }),settingsStatus);
+    Promise.all([api("/api/store/channels?store="+encodeURIComponent(ZYNOX.store.id)),api("/api/commerce/sale-notifications?store="+encodeURIComponent(ZYNOX.store.id))]).then(([d,n])=>{for(const c of d.channels){const o=new Option("#"+c.name,c.id);o.disabled=!c.available;channel.append(o);}if(n.settings){channel.value=n.settings.channel_id;style.value=n.settings.template;show();}settingsStatus.textContent=n.migration_needed?"É necessário aplicar a migração 0007 no banco D1.":"Selecione um canal e salve o modelo.";}).catch(e=>settingsStatus.textContent=e.message);
     async function load(){
       const id=stores.value;list.replaceChildren();if(!id)return;
       const [d,m]=await Promise.all([api("/api/commerce/overview?store="+encodeURIComponent(id)),api("/api/commerce/manual-pix?store="+encodeURIComponent(id))]);
