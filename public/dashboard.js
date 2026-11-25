@@ -854,7 +854,7 @@ function navigate(page) {
   if (page === "control" && !isAdmin()) return;
 
   ZYNOX.currentPage = page;
-
+  document.body.classList.toggle("server-selection-mode",page==="servers");
   closeMenu();
 
   document.querySelectorAll("[data-page]").forEach(item => {
@@ -1086,27 +1086,59 @@ function navigate(page) {
   }
 
   if (page === "servers") {
-    const box=panel("Selecionar servidor","Escolha o servidor que deseja gerenciar.");
-    const list=node("div"),invite=node("a","+ Adicionar ZYNOX ao servidor","control-button");
-    invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";invite.target="_blank";invite.rel="noopener noreferrer";
+    const wrapper=node("section",undefined,"server-entry");
+    const head=node("div",undefined,"server-entry-head");
+    head.append(node("span","✦ ZYNOX / GERENCIAMENTO","server-eyebrow"),node("h1","Seus servidores"),node("p","Selecione onde deseja gerenciar suas vendas, produtos e automações."));
+    const actions=node("div",undefined,"server-entry-actions");
+    const invite=node("a","+ Adicionar bot ao Discord","control-button");
+    invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
+    invite.target="_blank";invite.rel="noopener noreferrer";
+    const refresh=button("Atualizar",()=>load());actions.append(invite,refresh);
+    const notice=node("p",undefined,"server-entry-notice"),list=node("div",undefined,"server-grid");
+    const foot=node("div",undefined,"server-entry-footer");
+    foot.append(button("Minha conta",()=>navigate("account")));
+    if(isAdmin())foot.append(button("ZYNOX CONTROL",()=>navigate("control")));
+    wrapper.append(head,actions,notice,list,foot);main.append(wrapper);
     async function load(){
-      list.replaceChildren(node("p","Carregando servidores..."));
-      const d=await api("/api/server-controls");list.replaceChildren();
-      for(const server of d.stores){
-        const card=node("div",undefined,"control-item");
-        card.append(node("h3",server.name),node("p",server.removed_at?"Removido":server.enabled?"Operação habilitada":"Operação pausada"),node("p",server.enabled_since?"Habilitado desde: "+formatDate(server.enabled_since):"Vinculado em: "+formatDate(server.created_at)),node("p","Presença online não monitorada (bot HTTP)."));
-        if(!server.removed_at)card.append(button("Abrir dashboard",()=>{ZYNOX.store=server;updateProfile();navigate("home");}),button(server.enabled?"Pausar bot":"Reativar bot",async()=>{await api("/api/server-controls/action",{store_id:server.id,action:server.enabled?"pause":"resume"});await load();}),button("Remover bot",async()=>{if(!confirm("Remover ZYNOX deste servidor? Os registros da loja serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id)ZYNOX.store=null;await load();},true));
-        list.append(card);
+      notice.textContent="Carregando servidores...";
+      list.replaceChildren();
+      let data;
+      try{data=await api("/api/server-controls");}
+      catch(e){notice.textContent="Não foi possível carregar os servidores: "+e.message;list.append(button("Tentar novamente",load));return;}
+      notice.textContent=data.controls_ready?"Escolha um servidor para continuar.":"Seus servidores estão disponíveis. Os controles de pausa e remoção precisam da atualização do banco D1.";
+      for(const server of data.stores){
+        if(server.removed_at)continue;
+        const card=node("article",undefined,"server-card");
+        const badge=node("span",server.enabled?"● Ativo":"● Pausado","server-status"+(server.enabled?"":" is-paused"));
+        const icon=node("div",server.name?.slice(0,2).toUpperCase()||"ZY","server-avatar");
+        const top=node("div",undefined,"server-card-top");top.append(icon,badge);
+        card.append(top,node("h2",server.name),node("p","Servidor conectado ao Discord"),node("p",server.enabled_since?"Ativo desde "+formatDate(server.enabled_since):"Adicionado em "+formatDate(server.created_at),"server-date"));
+        const controls=node("div",undefined,"server-card-actions");
+        controls.append(button("Gerenciar servidor",()=>{ZYNOX.store=server;updateProfile();navigate("home");}));
+        if(data.controls_ready){
+          controls.append(button(server.enabled?"Pausar":"Reativar",async()=>{await api("/api/server-controls/action",{store_id:server.id,action:server.enabled?"pause":"resume"});await load();}));
+          controls.append(button("Remover",async()=>{if(!confirm("Remover o bot do servidor? Os registros serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id)ZYNOX.store=null;await load();},true));
+        }
+        card.append(controls);list.append(card);
       }
-      const discord=await api("/api/discord/servers");
-      if(discord.needsDiscord)list.append(button("Vincular Discord",()=>location.href="/auth/discord/link"));
-      for(const g of discord.servers||[]){
-        const existing=d.stores.find(x=>x.guild_id===g.id);
-        if(!existing||existing.removed_at){const card=node("div",undefined,"control-item");card.append(node("h3",g.name),button("Vincular servidor",async()=>{await api("/api/discord/store/link",{guild_id:g.id,name:g.name});const fresh=await api("/api/server-controls");const linked=fresh.stores.find(x=>x.guild_id===g.id);if(linked?.removed_at)await api("/api/server-controls/action",{store_id:linked.id,action:"resume"});await load();}));list.append(card);}
+      if(!data.stores.some(s=>!s.removed_at)){
+        const empty=node("div",undefined,"server-empty");
+        empty.append(node("h2","Nenhum servidor conectado"),node("p","Adicione a ZYNOX ao seu Discord e vincule o servidor para começar."));
+        list.append(empty);
       }
+      try{
+        const discord=await api("/api/discord/servers");
+        if(discord.needsDiscord)list.append(button("Vincular minha conta Discord",()=>location.href="/auth/discord/link"));
+        for(const g of discord.servers||[]){
+          const existing=data.stores.find(x=>x.guild_id===g.id);
+          if(existing&&!existing.removed_at)continue;
+          const card=node("article",undefined,"server-card");
+          card.append(node("span","DISPONÍVEL PARA VINCULAR","server-eyebrow"),node("h2",g.name),button("Vincular servidor",async()=>{await api("/api/discord/store/link",{guild_id:g.id,name:g.name});await load();}));
+          list.append(card);
+        }
+      }catch(e){notice.textContent+=" Não foi possível atualizar a lista do Discord; os servidores já vinculados continuam acessíveis.";}
     }
-    box.append(invite,button("Atualizar servidores",load),list,button("Minha conta",()=>navigate("account")));if(isAdmin())box.append(button("ZYNOX CONTROL",()=>navigate("control")));
-    main.append(box);load().catch(e=>list.append(node("p",e.message,"control-error")));return;
+    load();return;
   }
 
   if (page === "bot") {
