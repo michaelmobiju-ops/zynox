@@ -60,7 +60,7 @@ export async function commerce(request,env,storeChannels){
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
   const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
-  const payload={embeds:[embed],allowed_mentions:{parse:[]},components:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:true}]}]};
+  const payload={embeds:[embed],allowed_mentions:{parse:[]},components:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}]};
   const locked=await env.DB.prepare("UPDATE products SET status='publishing' WHERE id=? AND store_id=? AND status IN ('draft','active')").bind(p.id,store.id).run();
   if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
   let response;
