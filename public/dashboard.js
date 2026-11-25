@@ -38,7 +38,16 @@ function toast(message,success=false){
   setTimeout(()=>item.remove(),7000);
 }
 window.alert=message=>toast(message);
-window.confirm=message=>{toast("Confirmação necessária: "+message);return false;};
+function confirmInApp(message){
+ return new Promise(resolve=>{
+  const shade=node("div",undefined,"zynox-confirm-shade"),dialog=node("div",undefined,"zynox-confirm");
+  dialog.append(node("h3","Confirmar ação"),node("p",message));
+  const actions=node("div",undefined,"control-navigation");
+  const finish=value=>{shade.remove();resolve(value);};
+  actions.append(button("Cancelar",()=>finish(false)),button("Confirmar",()=>finish(true),true));
+  dialog.append(actions);shade.append(dialog);document.body.append(shade);
+ });
+}
 
 function element(id) {
   return document.getElementById(id);
@@ -442,7 +451,7 @@ async function controlLicenses(container) {
     if (license.status !== "revoked") {
       card.appendChild(
         button("Revogar licença", async () => {
-          if (!confirm("Revogar esta licença?")) return;
+          if (!await confirmInApp("Revogar esta licença?")) return;
 
           await api(
             "/api/owner/licenses/revoke",
@@ -538,7 +547,7 @@ async function controlUsers(container) {
         field("Vitalício", lifetime),
 
         button("Atualizar assinatura", async () => {
-          if (!confirm(
+          if (!await confirmInApp(
             "Substituir o período atual da assinatura?"
           )) return;
 
@@ -566,7 +575,7 @@ async function controlUsers(container) {
               ? "active"
               : "suspended";
 
-            if (!confirm("Alterar status desta conta?")) return;
+            if (!await confirmInApp("Alterar status desta conta?")) return;
 
             await api(
               "/api/control/users/status",
@@ -580,7 +589,7 @@ async function controlUsers(container) {
         ),
 
         button("Cancelar assinatura", async () => {
-          if (!confirm("Cancelar esta assinatura?")) return;
+          if (!await confirmInApp("Cancelar esta assinatura?")) return;
 
           await api(
             "/api/control/subscriptions/cancel",
@@ -664,7 +673,7 @@ async function controlAdmins(container) {
           : "Suspender administrador",
 
         async () => {
-          if (!confirm("Alterar status do administrador?")) return;
+          if (!await confirmInApp("Alterar status do administrador?")) return;
 
           await api(
             "/api/control/admins/status",
@@ -909,7 +918,7 @@ function navigate(page) {
         if(p.image_url){const img=node("img");img.src=p.image_url;img.alt="Imagem do produto";img.loading="lazy";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-width:220px;max-height:120px;object-fit:contain;border-radius:8px;";card.append(img);}
         card.append(node("h3",p.name),node("p",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status));
         for(const v of d.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2).replace(".",",")+" • Estoque: "+(v.infinite_stock?"Infinito":v.available)));
-        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}),button("Excluir produto",async()=>{if(!confirm("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));listing.append(card);
+        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}),button("Excluir produto",async()=>{if(!await confirmInApp("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));listing.append(card);
       }if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
     }
     async function openEditor(product){
@@ -973,7 +982,7 @@ function navigate(page) {
         card.append(node("strong","Pedido "+o.order_id),node("p","R$ "+(o.amount_cents/100).toFixed(2).replace(".",",")),node("p",o.status==="confirmed"?"Confirmado pelo vendedor":o.status==="pending"?"Aguardando conferência bancária":"Cancelado"));
         if(o.status==="pending"&&o.order_status==="pending"){
           const ref=input("ID da transação Pix (EndToEndId)"),verified=input("","checkbox");ref.maxLength=32;
-          card.append(field("ID da transação no extrato",ref),field("Conferi o crédito e o valor na minha conta bancária",verified),button("Confirmar recebimento",async()=>{if(!verified.checked)throw Error("Confira o extrato primeiro.");if(!confirm("Confirma que o valor foi recebido na sua conta?"))return;await api("/api/commerce/manual-pix/confirm",{store_id:id,order_id:o.order_id,bank_reference:ref.value,verified:true});await load();}));
+          card.append(field("ID da transação no extrato",ref),field("Conferi o crédito e o valor na minha conta bancária",verified),button("Confirmar recebimento",async()=>{if(!verified.checked)throw Error("Confira o extrato primeiro.");if(!await confirmInApp("Confirma que o valor foi recebido na sua conta?"))return;await api("/api/commerce/manual-pix/confirm",{store_id:id,order_id:o.order_id,bank_reference:ref.value,verified:true});await load();}));
         }
         if(o.status==="confirmed"){
           const deliveryLabels={paid:"Entrega pendente",delivering:"Entrega em análise — não reenvie até verificar",delivered:"Produto entregue"};
@@ -1156,7 +1165,7 @@ function navigate(page) {
     async function load(){const id=stores.value;content.replaceChildren();if(!id)return;status.textContent="Carregando...";
       const d=await api("/api/commerce/"+page+"?store="+encodeURIComponent(id));if(stores.value!==id)return;status.textContent="Dados atualizados.";
       if(page==="settings"){
-        const name=input("Nome da loja");name.value=d.store.name;name.maxLength=100;content.append(field("Nome da loja",name),node("p","Servidor Discord: "+d.store.guild_id),button("Salvar alterações",async()=>{const result=await api("/api/commerce/settings",{store_id:id,name:name.value});ZYNOX.store.name=result.name;updateProfile();status.textContent="Configurações salvas."; }),node("h3","Gerenciar conexão do bot"),node("p","A remoção do bot não apaga o histórico de vendas ou produtos."),button("Remover bot do servidor",async()=>{if(!confirm("Deseja realmente remover a ZYNOX deste servidor?"))return;await api("/api/server-controls/action",{store_id:id,action:"leave",confirm:true});ZYNOX.store=null;navigate("servers");},true));
+        const name=input("Nome da loja");name.value=d.store.name;name.maxLength=100;content.append(field("Nome da loja",name),node("p","Servidor Discord: "+d.store.guild_id),button("Salvar alterações",async()=>{const result=await api("/api/commerce/settings",{store_id:id,name:name.value});ZYNOX.store.name=result.name;updateProfile();status.textContent="Configurações salvas."; }),node("h3","Gerenciar conexão do bot"),node("p","A remoção do bot não apaga o histórico de vendas ou produtos."),button("Remover bot do servidor",async()=>{if(!await confirmInApp("Deseja realmente remover a ZYNOX deste servidor?"))return;await api("/api/server-controls/action",{store_id:id,action:"leave",confirm:true});ZYNOX.store=null;navigate("servers");},true));
       }else if(page==="integrations"){
         content.append(card("Discord","Servidor vinculado: "+d.discord.guild_id,d.discord.bot_configured?"Token do bot configurado":"Token do bot não configurado"),button("Gerenciar servidores",()=>navigate("servers")),node("h3","Provedores de pagamento"));for(const g of d.gateways)content.append(card(g.provider,g.status+(g.is_primary?" — principal":"")));if(!d.gateways.length)content.append(node("p","Nenhum provedor conectado."));content.append(button("Gerenciar gateways",()=>navigate("gateways")),card("ZYNOX Wallet","EM BREVE !"),card("Zynox AI","Ainda não disponível"),node("p","Pagamentos reais não habilitados."));
       }else{
@@ -1201,7 +1210,7 @@ function navigate(page) {
         controls.append(button("Gerenciar servidor",()=>{ZYNOX.store=server;try{sessionStorage.setItem("zynox:store:"+ZYNOX.user.id,JSON.stringify({id:server.id,name:server.name,guild_id:server.guild_id}));}catch{}updateProfile();navigate("home");}));
         if(data.controls_ready){
           controls.append(button(server.enabled?"Pausar":"Reativar",async()=>{await api("/api/server-controls/action",{store_id:server.id,action:server.enabled?"pause":"resume"});await load();}));
-          controls.append(button("Remover",async()=>{if(!confirm("Remover o bot do servidor? Os registros serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id){ZYNOX.store=null;try{sessionStorage.removeItem("zynox:store:"+ZYNOX.user.id);}catch{}}await load();},true));
+          controls.append(button("Remover",async()=>{if(!await confirmInApp("Remover o bot do servidor? Os registros serão preservados."))return;await api("/api/server-controls/action",{store_id:server.id,action:"leave",confirm:true});if(ZYNOX.store?.id===server.id){ZYNOX.store=null;try{sessionStorage.removeItem("zynox:store:"+ZYNOX.user.id);}catch{}}await load();},true));
         }
         card.append(controls);list.append(card);
       }
