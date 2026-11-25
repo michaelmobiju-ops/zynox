@@ -36,9 +36,37 @@ export async function commerce(request,env,storeChannels){
   if(!name||name.length>256||description.length>4096||image.length>2048||(image&&!/^https:\/\//i.test(image))||!/^#[0-9a-f]{6}$/i.test(color)||!button||button.length>80||!/^\d{17,20}$/.test(channel)||!Array.isArray(variants)||variants.length<1||variants.length>25||variants.some(v=>!v||typeof v.name!=="string"||!v.name.trim()||v.name.length>80||!Number.isSafeInteger(v.price_cents)||v.price_cents<1||v.price_cents>100000000))return fail("Dados do produto inválidos.");
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===channel&&c.available))return fail("Canal não autorizado.",403);
-  const id=crypto.randomUUID();
-  await env.DB.batch([env.DB.prepare("INSERT INTO products(id,store_id,name,description,image_url,color,button_text,has_variations,channel_id,status) VALUES(?,?,?,?,?,?,?,?,?,'draft')").bind(id,store.id,name,description,image,color,button,body.has_variations?1:0,channel),...variants.map(v=>env.DB.prepare("INSERT INTO variants(id,product_id,name,price_cents) VALUES(?,?,?,?)").bind(crypto.randomUUID(),id,v.name.trim(),v.price_cents))]);
-  return json({success:true,id},201);
+  if(!body.has_variations&&variants.length!==1)return fail("Produto sem variações deve ter apenas um preço.");
+  const existing=body.product_id?await env.DB.prepare("SELECT * FROM products WHERE id=? AND store_id=?").bind(String(body.product_id),store.id).first():null;
+  if(body.product_id&&!existing)return fail("Produto não encontrado.",404);
+  if(existing&&(!["draft","active"].includes(existing.status)||(existing.message_id&&existing.channel_id!==channel)))return fail("Produto em publicação ou canal de anúncio já definido.",409);
+  const id=existing?.id||crypto.randomUUID(),old=existing?await list("SELECT * FROM variants WHERE product_id=?",id):[];
+  const ids=variants.filter(v=>v.id).map(v=>v.id);
+  if(new Set(ids).size!==ids.length||ids.some(x=>!old.some(v=>v.id===x)))return fail("Variações inválidas.");
+  if(old.some(v=>!ids.includes(v.id)))return fail("Variações existentes não podem ser removidas nesta versão, para preservar estoque e pedidos.",409);
+  const prepared=variants.map(v=>({...v,id:v.id||crypto.randomUUID(),keys:typeof v.keys==="string"?[...new Set(v.keys.split(/\r?\n/).map(x=>x.trim()).filter(Boolean))]:[]}));
+  if(prepared.some(v=>v.keys.length>50||v.keys.some(k=>k.length>1000))||prepared.reduce((n,v)=>n+v.keys.length,0)>50)return fail("Limite de 50 novas keys por salvamento.");
+  const statements=[existing?env.DB.prepare("UPDATE products SET name=?,description=?,image_url=?,color=?,button_text=?,has_variations=?,channel_id=? WHERE id=? AND store_id=?").bind(name,description,image,color,button,body.has_variations?1:0,channel,id,store.id):env.DB.prepare("INSERT INTO products(id,store_id,name,description,image_url,color,button_text,has_variations,channel_id,status) VALUES(?,?,?,?,?,?,?,?,?,'draft')").bind(id,store.id,name,description,image,color,button,body.has_variations?1:0,channel)];
+  let enc,key,mac;const hex=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+  if(prepared.some(v=>v.keys.length)){
+   if(!env.STOCK_ENCRYPTION_KEY||env.STOCK_ENCRYPTION_KEY.length<32)return fail("Configure STOCK_ENCRYPTION_KEY na Cloudflare.",503);
+   enc=new TextEncoder();const material=await crypto.subtle.importKey("raw",enc.encode(env.STOCK_ENCRYPTION_KEY),"HKDF",false,["deriveKey"]);
+   const derive=(info,algorithm,usages)=>crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt:enc.encode("zynox-stock-v1"),info:enc.encode(info)},material,algorithm,false,usages);
+   key=await derive("encryption",{name:"AES-GCM",length:256},["encrypt"]);mac=await derive("fingerprint",{name:"HMAC",hash:"SHA-256",length:256},["sign"]);
+  }
+  for(const v of prepared){
+   const previous=old.find(x=>x.id===v.id);
+   if(previous&&v.infinite!==undefined&&Boolean(previous.infinite_stock)!==Boolean(v.infinite))return fail("Altere o modo de estoque pelo controle específico da variação.",409);
+   if(previous?.infinite_stock&&v.keys.length)return fail("Desative estoque infinito antes de adicionar keys.",409);
+   if(!previous&&v.infinite&&v.keys.length!==1)return fail("Estoque infinito exige exatamente uma key.");
+   statements.push(previous?env.DB.prepare("UPDATE variants SET name=?,price_cents=? WHERE id=? AND product_id=?").bind(v.name.trim(),v.price_cents,v.id,id):env.DB.prepare("INSERT INTO variants(id,product_id,name,price_cents,infinite_stock) VALUES(?,?,?,?,?)").bind(v.id,id,v.name.trim(),v.price_cents,v.infinite?1:0));
+   for(const value of v.keys){
+    const iv=crypto.getRandomValues(new Uint8Array(12)),encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:enc.encode(v.id)},key,enc.encode(value)),fingerprint=hex(await crypto.subtle.sign("HMAC",mac,enc.encode(v.id+"\0"+value)));
+    statements.push(env.DB.prepare("INSERT INTO stock(id,variant_id,key_encrypted,key_fingerprint) VALUES(?,?,?,?) ON CONFLICT(variant_id,key_fingerprint) DO NOTHING").bind(crypto.randomUUID(),v.id,hex(iv)+":"+hex(encrypted),fingerprint));
+   }
+  }
+  await env.DB.batch(statements);
+  return json({success:true,id},existing?200:201);
  }
  if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
   if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
