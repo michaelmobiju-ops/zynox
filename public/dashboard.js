@@ -963,6 +963,22 @@ function navigate(page) {
     return;
   }
 
+  if (page === "ai") {
+    const box=panel("Zynox AI","Assistente inteligente da ZYNOX.");
+    const status=node("p","Verificando disponibilidade..."),chat=node("div",undefined,"control-item"),prompt=node("textarea",undefined,"control-input"),send=button("Enviar",()=>{});
+    prompt.placeholder="Pergunte sobre sua loja...";prompt.disabled=true;send.disabled=true;
+    chat.append(node("h3","Zynox AI"),node("p","Em breve você poderá receber ajuda para organizar produtos, vendas e configurações da loja."));
+    box.append(chat,status,field("Mensagem",prompt),send);main.append(box);
+    api("/api/ai/status").then(d=>status.textContent=d.message).catch(e=>status.textContent=e.message);return;
+  }
+  if (page === "support") {
+    const box=panel("Suporte","Abra um chamado para a equipe da ZYNOX. Não envie senhas, tokens ou dados bancários.");
+    const subject=input("Assunto"),message=node("textarea",undefined,"control-input"),status=node("p","Carregando..."),list=node("div");
+    subject.maxLength=120;message.maxLength=3000;message.placeholder="Descreva sua dúvida ou problema...";
+    async function load(){const d=await api("/api/support");list.replaceChildren();for(const t of d.items){const c=node("div",undefined,"control-item");c.append(node("h3",t.subject),node("p",t.message),node("p",t.status==="closed"?"Encerrado":"Aberto"),node("p",formatDate(t.created_at)),node("p","Protocolo: "+t.id));list.append(c);}if(!d.items.length)list.append(node("p","Nenhum chamado registrado."));status.textContent="Chamados atualizados.";}
+    box.append(field("Assunto",subject),field("Descrição",message),button("Abrir chamado",async()=>{await api("/api/support",{subject:subject.value,message:message.value});subject.value="";message.value="";await load();status.textContent="Chamado registrado.";}),status,node("h3","Meus chamados"),list,button("Atualizar",load));main.append(box);load().catch(e=>status.textContent=e.message);return;
+  }
+
   if (page === "notifications") {
     const box=panel("Notificações","Avisos da sua conta ZYNOX.");
     const list=node("div"),status=node("p","Carregando...");
@@ -1025,7 +1041,7 @@ function navigate(page) {
     invite.href = "https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
     invite.target = "_blank";
     invite.rel = "noopener noreferrer";
-    box.append(invite);
+    box.append(invite,node("p","Aplicação compartilhada da ZYNOX. O bot usa interações HTTP; o indicador online do Discord pode aparecer desligado."),button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver automações",()=>navigate("automations")),node("h3","Comandos disponíveis"),node("p","/ping • /zynox • /painel • /ajuda"));
     if (isOwner()) {
       const status = node("p","Verifique a conexão ou registre os comandos.");
       box.append(status,button("Verificar conexão",async()=>{
