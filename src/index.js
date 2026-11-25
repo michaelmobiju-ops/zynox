@@ -481,6 +481,35 @@ export default {
         return json({stores,metrics:{...orders,products:products.total,customers:customers.total},days:days.results,recent:recent.results});
       }
 
+      if(path.startsWith("/media/sales/")&&request.method==="GET"){
+        if(!env.SALE_IMAGES)return new Response("Imagem indisponível.",{status:404});
+        const name=path.slice("/media/sales/".length);
+        if(!/^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/.test(name))return new Response("Imagem inválida.",{status:400});
+        const object=await env.SALE_IMAGES.get(name);
+        if(!object)return new Response("Imagem não encontrada.",{status:404});
+        return new Response(object.body,{headers:{"Content-Type":object.httpMetadata?.contentType||"application/octet-stream","Cache-Control":"public,max-age=86400","X-Content-Type-Options":"nosniff"}});
+      }
+      if(path==="/api/media/sales"&&request.method==="POST"){
+        if(request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+        const user=await getSession(request,env);if(!user)return json({error:"Autenticação necessária."},401);
+        if(!env.SALE_IMAGES)return json({error:"Configure o bucket R2 SALE_IMAGES na Cloudflare para enviar imagens."},503);
+        const storeId=url.searchParams.get("store")||"";
+        const store=await env.DB.prepare("SELECT id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
+        if(!store)return json({error:"Loja não autorizada."},403);
+        const type=request.headers.get("Content-Type")||"";
+        const mime={"image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif"};
+        if(!mime[type])return json({error:"Envie PNG, JPG, WEBP ou GIF."},415);
+        const length=Number(request.headers.get("Content-Length")||0);
+        if(length>5*1024*1024)return json({error:"Imagem deve ter no máximo 5 MB."},413);
+        const bytes=await request.arrayBuffer();
+        if(bytes.byteLength>5*1024*1024||bytes.byteLength<10)return json({error:"Tamanho inválido."},413);
+        const signature=new Uint8Array(bytes.slice(0,16));
+        const valid=(type==="image/png"&&signature[0]===137&&signature[1]===80&&signature[2]===78&&signature[3]===71)||(type==="image/jpeg"&&signature[0]===255&&signature[1]===216&&signature[2]===255)||(type==="image/gif"&&signature[0]===71&&signature[1]===73&&signature[2]===70)||(type==="image/webp"&&String.fromCharCode(...signature.slice(0,4))==="RIFF"&&String.fromCharCode(...signature.slice(8,12))==="WEBP");
+        if(!valid)return json({error:"Formato de imagem inválido."},415);
+        const key=crypto.randomUUID()+"."+mime[type];
+        await env.SALE_IMAGES.put(key,bytes,{httpMetadata:{contentType:type},customMetadata:{storeId}});
+        return json({url:url.origin+"/media/sales/"+key});
+      }
       if (path === "/api/store/channels") return storeChannels(request,env);
       if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
 
