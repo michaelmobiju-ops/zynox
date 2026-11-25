@@ -401,6 +401,25 @@ export default {
       if (path === "/api/store/channels") return storeChannels(request,env);
       if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
 
+      if (path === "/api/notifications" || path === "/api/notifications/read") {
+        const user = await getSession(request, env);
+        if (!user) return json({error:"Autenticação necessária."},401);
+        if (path === "/api/notifications" && request.method === "GET") {
+          const items = (await env.DB.prepare("SELECT id,title,message,is_read,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(user.id).all()).results;
+          const count = await env.DB.prepare("SELECT count(*) AS total FROM notifications WHERE user_id=? AND is_read=0").bind(user.id).first();
+          return json({items,unread:count.total});
+        }
+        if (path === "/api/notifications/read" && request.method === "POST") {
+          if(request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+          let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
+          if(body?.all===true)await env.DB.prepare("UPDATE notifications SET is_read=1 WHERE user_id=?").bind(user.id).run();
+          else if(typeof body?.id==="string"&&body.id.length<=128)await env.DB.prepare("UPDATE notifications SET is_read=1 WHERE user_id=? AND id=?").bind(user.id,body.id).run();
+          else return json({error:"Notificação inválida."},400);
+          return json({success:true});
+        }
+        return json({error:"Método não permitido."},405);
+      }
+
       // STATUS DO SERVIDOR
 
       if (path === "/api/status") {
