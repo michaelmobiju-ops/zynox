@@ -135,7 +135,7 @@ export async function commerce(request,env,storeChannels){
   const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:enc.encode(variantId)},key,enc.encode(value));
   const fingerprint=hex(await crypto.subtle.sign("HMAC",mac,enc.encode(variantId+String.fromCharCode(0)+value)));
   try{
-   const result=await env.DB.prepare("UPDATE stock SET key_encrypted=?,key_fingerprint=? WHERE id=? AND variant_id=? AND status='available' AND EXISTS(SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND v.infinite_stock=0) AND NOT EXISTS(SELECT 1 FROM order_stock os WHERE os.stock_id=?)").bind(hex(iv)+":"+hex(encrypted),fingerprint,stockId,variantId,variantId,store.id,stockId).run();
+   const result=await env.DB.prepare("UPDATE stock SET key_encrypted=?,key_fingerprint=? WHERE id=? AND variant_id=? AND status='available' AND EXISTS(SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?  ) AND NOT EXISTS(SELECT 1 FROM order_stock os WHERE os.stock_id=?)").bind(hex(iv)+":"+hex(encrypted),fingerprint,stockId,variantId,variantId,store.id,stockId).run();
    if(!result.meta.changes)return fail("Key não editável: reservada, utilizada ou vinculada a pedido.",409);
    return json({success:true});
   }catch{return fail("Key já cadastrada nesta variação ou atualização indisponível.",409);}
