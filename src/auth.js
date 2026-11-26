@@ -197,7 +197,7 @@ export async function discordCallback(request, env) {
 export async function getSession(request, env) {
   const token = getCookie(request, "zynox_session");
 
-  if (!token) return null;
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
 
   const hash = await hashToken(token);
 
