@@ -28,7 +28,7 @@ export async function customBots(request,env){
  const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
  if(!store)return fail("Servidor não encontrado ou sem permissão.",404);
  const current=await env.DB.prepare("SELECT store_id,application_id,bot_user_id,bot_name,public_key,token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();
- if(request.method==="GET")return respond({connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions"}:null});
+ if(request.method==="GET")return respond({connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions/"+current.application_id}:null});
  if(url.pathname==="/api/custom-bot/connect"){
   const token=String(body.token||"").trim();
   if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Token do bot inválido.");
@@ -45,7 +45,7 @@ export async function customBots(request,env){
   if(existing)return fail("Este bot já está conectado a outra loja.",409);
   const cipher=await seal(env,token);
   await env.DB.prepare("INSERT INTO custom_bots(store_id,application_id,bot_user_id,public_key,token_cipher,bot_name) VALUES(?,?,?,?,?,?) ON CONFLICT(store_id) DO UPDATE SET token_cipher=excluded.token_cipher,public_key=excluded.public_key,bot_name=excluded.bot_name,updated_at=CURRENT_TIMESTAMP").bind(storeId,app.data.id,identity.data.id,app.data.verify_key,cipher,identity.data.username||"Bot").run();
-  return respond({connected:true,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions"});
+  return respond({connected:true,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions/"+app.data.id});
  }
  if(url.pathname==="/api/custom-bot/profile"){
   if(!current)return fail("Conecte seu bot primeiro.",409);
