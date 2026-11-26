@@ -115,6 +115,19 @@ export async function commerce(request,env,storeChannels){
    await env.DB.prepare("UPDATE products SET status='archived',message_id=NULL WHERE id=? AND store_id=?").bind(id,store.id).run();
    return json({success:true,archived:true});
   }
+ if(path==="/api/commerce/stock/list"&&request.method==="GET"){
+  const variantId=url.searchParams.get("variant_id")||"";
+  const variant=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(variantId,store.id).first();
+  if(!variant)return fail("Variação não encontrada.",404);
+  const rows=await env.DB.prepare("SELECT id,status,created_at FROM stock WHERE variant_id=? ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
+  return json({infinite:Boolean(variant.infinite_stock),items:rows.results});
+ }
+ if(path==="/api/commerce/stock/remove"&&request.method==="POST"){
+  const variantId=String(body.variant_id||""),stockId=String(body.stock_id||"");
+  const result=await env.DB.prepare("DELETE FROM stock WHERE id=? AND variant_id=? AND status='available' AND EXISTS(SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND v.infinite_stock=0) AND NOT EXISTS(SELECT 1 FROM order_stock os WHERE os.stock_id=?)").bind(stockId,variantId,variantId,store.id,stockId).run();
+  if(!result.meta.changes)return fail("Key não disponível para remoção ou já vinculada a pedido.",409);
+  return json({success:true});
+ }
  if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
   if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
   const v=await env.DB.prepare("SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
