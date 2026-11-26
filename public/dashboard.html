@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
-  <link rel="stylesheet" href="/dashboard.css?v=imagepresets-1">
-  <script src="/dashboard.js?v=3b6be80" defer></script>
+  <link rel="stylesheet" href="/dashboard.css?v=mobile-redesign-20261126">
+  <script src="/dashboard.js?v=mobile-redesign-20261126" defer></script>
 </head>
 
 <body>
@@ -19,7 +19,7 @@
   <div id="app" hidden>
 
     <header class="topbar">
-      <a href="/dashboard" class="logo">ZYNOX</a>
+      <a href="/dashboard" class="logo"><span class="zynox-brand-icon">Z</span><span>ZYNOX</span></a>
 
       <div class="profile"><button id="selected-server" data-page="servers" class="control-button">Servidores</button>
         <span id="header-avatar" class="header-avatar" aria-label="Foto de perfil"></span><span id="username">Usuário</span>
@@ -32,50 +32,56 @@
     <aside id="sidebar" hidden>
 
       <div class="sidebar-header">
-        <h2>ZYNOX</h2>
+        <h2><span class="zynox-brand-icon">Z</span> ZYNOX</h2>
         <button id="close-menu">✕</button>
       </div>
 
-      <nav id="navigation">
+      <nav id="navigation" aria-label="Menu principal">
 
         <small>PRINCIPAL</small>
 
-        <button data-page="home">Início</button>
-        <button data-page="dashboard">Dashboard</button>
+        <button data-page="home" data-icon="⌂">Visão geral</button>
+        <button data-page="dashboard" data-icon="▤">Dashboard</button>
 
         <small>GERENCIAMENTO</small>
+        <button data-page="servers" data-icon="◉">Servidores</button>
+        <button data-page="bot" data-icon="▣">Meu bot</button>
+        <button data-page="stock" data-icon="▱">Estoque</button>
 
-        <button data-page="products">Produtos</button>
+        <button data-icon="⬡" data-page="products">Produtos</button>
 
-        <button data-page="sales">Vendas</button>
-        <button data-page="coupons">Cupons e ofertas</button>
-        <button data-page="customers">Clientes</button>
-        <button data-page="tickets">Tickets</button>
+        <button data-icon="🛒" data-page="sales">Vendas</button>
+        <button data-icon="♧" data-page="coupons">Cupons e ofertas</button>
+        <button data-icon="♙" data-page="customers">Clientes</button>
+        <button data-icon="▣" data-page="tickets">Tickets</button>
 
         <small>FINANCEIRO</small>
 
-        <button data-page="payments">Notificações de vendas</button>
-        <button data-page="gateways">Gateways e bancos</button>
-        <button data-page="wallet">Carteira digital</button>
+        <button data-icon="◈" data-page="payments">Notificações de vendas</button>
+        <button data-icon="◇" data-page="gateways">Gateways e bancos</button>
+        <button data-icon="◉" data-page="wallet">Carteira digital</button>
 
         <small>FERRAMENTAS</small>
+        <button data-page="automations" data-icon="⚡">Automações</button>
+        <button data-page="integrations" data-icon="◇">Integrações</button>
 
-        <button data-page="ai">Zynox AI</button>
-        <button data-page="reports">Relatórios</button>
+        <button data-icon="✦" data-page="ai">Zynox AI</button>
+        <button data-icon="▥" data-page="reports">Relatórios</button>
 
         <small>CONTA</small>
 
-        <button data-page="plans">Atualizar plano</button>
-        <button data-page="settings">Configurações</button>
-        <button data-page="support">Suporte</button>
-        <button data-page="account">Minha conta e servidores</button>
+        <button data-icon="♕" data-page="plans">Atualizar plano</button>
+        <button data-icon="⚙" data-page="settings">Configurações</button>
+        <button data-icon="♧" data-page="support">Suporte</button>
+        <button data-icon="◉" data-page="account">Minha conta e servidores</button>
 
         <div id="admin-navigation" hidden>
           <small>ADMINISTRAÇÃO</small>
-          <button data-page="control">Zynox Control</button>
-          <button data-page="notifications">Notificações</button>
+          <button data-icon="⚙" data-page="control">Zynox Control</button>
+          <button data-icon="♧" data-page="notifications">Notificações</button>
         </div>
 
+        <div class="sidebar-account" data-page="account"><span class="account-avatar">◉</span><span>Minha conta<small>Área do usuário</small></span><span>›</span></div>
         <button id="logout" class="logout">
           Sair da conta
         </button>
@@ -85,10 +91,10 @@
 
     <main id="main-content">
 
-      <section class="welcome">
+      <section class="welcome"><div class="welcome-avatar" aria-hidden="true">◉</div>
         <span class="tag">PAINEL DE CONTROLE</span>
         <h1>Olá, <span id="welcome-name">usuário</span>!</h1>
-        <p>Gerencie sua operação em um único lugar.</p>
+        <p>Seu negócio, suas vendas e seus clientes em um só lugar.</p>
       </section>
 
       <section class="panel"><label for="dashboard-store">Loja</label><select id="dashboard-store" class="control-input"><option value="">Todas as minhas lojas</option></select><button id="dashboard-refresh" class="control-button">Atualizar indicadores</button><p id="dashboard-status" role="status">Carregando...</p></section>
@@ -120,7 +126,7 @@
 
       </section>
 
-      <section class="panel">
+      <section class="panel chart-panel">
         <h2>Desempenho de vendas — últimos 7 dias (UTC)</h2><p>Inclui pagamentos de teste registrados. Não representa saldo bancário.</p>
         <div id="sales-chart" class="chart">
           <p>Nenhum relatório disponível.</p>
