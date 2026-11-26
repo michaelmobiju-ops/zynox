@@ -1434,8 +1434,8 @@ async function initialize() {
     if (element("app")) {
       element("app").hidden = false;
     }
-    let savedPage="servers";try{savedPage=sessionStorage.getItem("zynox:last-page")||"servers";}catch{}
-    navigate(pageNames[savedPage]?savedPage:"servers");
+    let savedPage="home";try{savedPage=sessionStorage.getItem("zynox:last-page")||"home";}catch{}
+    navigate(pageNames[savedPage]?savedPage:"home");
 
   } catch (error) {
     const loading = element("loading");
