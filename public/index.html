@@ -7,8 +7,8 @@
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
   <link rel="stylesheet" href="/style.css?v=ecosystem-20261126-1">
-  <script src="/app.js?v=neon-2" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=3"></head>
+  <script src="/app.js?v=plans-5" defer></script>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=5"></head>
 <body>
 
 <header class="header"><div class="mobile-menu-wrap"><button type="button" class="mobile-menu-trigger" id="mobile-menu-trigger" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-menu-panel"><span></span><span></span></button><nav class="mobile-menu-panel" id="mobile-menu-panel" hidden><a href="#recursos">Recursos</a><a href="#como-funciona">Como funciona</a><a href="#planos">Planos</a><a href="#faq">Perguntas frequentes</a><button type="button" onclick="openLogin()">Entrar na conta</button></nav></div>
@@ -148,13 +148,13 @@
 
   <section class="section" id="planos">
     <span class="section-kicker">PLANOS E ASSINATURAS</span><h2>Seu próximo passo<br><span class="gradient-word">começa aqui.</span></h2>
-    <p>Uma solução para cada etapa da sua loja.</p>
+    <p>Uma solução para cada etapa da sua loja.</p><p class="neon-plan-note">Benefícios previstos e provisórios; exclusividade por plano e recursos futuros sujeitos à implementação.</p>
 
     <div class="features">
 
       <article class="card plan">
         <h3>Starter</h3>
-        <p>Para quem está começando.</p>
+        <p>Para começar a vender e entregar produtos digitais.</p><ul class="neon-plan-benefits"><li>Bot de vendas</li><li>Produtos e estoque digital</li><li>Entrega após confirmação do pagamento</li><li>Painel de gerenciamento</li></ul>
         <button class="button" onclick="selectPlan('Starter')">
           Escolher Starter
         </button>
@@ -163,7 +163,7 @@
       <article class="card plan featured">
         <span class="tag">DESTAQUE</span>
         <h3>Pro</h3>
-        <p>Para lojas em crescimento.</p>
+        <p>Para lojas que querem ampliar a gestão.</p><ul class="neon-plan-benefits"><li>Tudo do Starter</li><li>Cupons e ofertas</li><li>Automações avançadas planejadas</li><li>Relatórios e integrações adicionais planejados</li></ul>
         <button class="button" onclick="selectPlan('Pro')">
           Escolher Pro
         </button>
@@ -171,7 +171,7 @@
 
       <article class="card plan">
         <h3>Premium</h3>
-        <p>Para operações mais completas.</p>
+        <p>Para operações que desejam acesso aos recursos superiores.</p><ul class="neon-plan-benefits"><li>Tudo do Pro</li><li>ZYNOX AI conforme disponibilidade</li><li>Relatórios e integrações avançados planejados</li><li>Suporte prioritário planejado</li></ul>
         <button class="button" onclick="selectPlan('Premium')">
           Escolher Premium
         </button>
@@ -265,7 +265,7 @@
 
 <section id="duration" class="login-page" hidden>
   <div class="login-card">
-    <h2 id="selected-plan">Escolha a duração</h2>
+    <h2 id="selected-plan">Escolha a duração</h2><div id="selected-benefits"></div>
     <div id="duration-options"></div>
     <button class="back" onclick="goHome()">
       Voltar

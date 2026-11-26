@@ -84,6 +84,7 @@ function selectPlan(planName) {
   if (!plan) return;
 
   ZYNOX.selectedPlan = key;
+  renderPlanBenefits(key);
 
   const title = document.getElementById(
     "selected-plan"
@@ -367,3 +368,6 @@ document.addEventListener(
 function setAccessMode(access){const form=document.getElementById("access-form"),methods=document.getElementById("login-methods"),back=document.getElementById("back-methods");if(!form||!methods||!back)return;form.hidden=!access;methods.hidden=access;back.hidden=!access;if(!access){document.getElementById("password").value="";document.getElementById("login-message").textContent="";}}
 document.getElementById("choose-access")?.addEventListener("click",()=>{setAccessMode(true);document.getElementById("username")?.focus();});
 document.getElementById("back-methods")?.addEventListener("click",()=>{setAccessMode(false);document.getElementById("choose-access")?.focus();});
+
+const planBenefits={"starter":["Para começar a vender e entregar produtos digitais.","Bot de vendas","Produtos e estoque digital","Entrega após confirmação do pagamento","Painel de gerenciamento"],"pro":["Para lojas que querem ampliar a gestão.","Tudo do Starter","Cupons e ofertas","Automações avançadas planejadas","Relatórios e integrações adicionais planejados"],"premium":["Para operações que desejam acesso aos recursos superiores.","Tudo do Pro","ZYNOX AI conforme disponibilidade","Relatórios e integrações avançados planejados","Suporte prioritário planejado"]};
+function renderPlanBenefits(key){const host=document.getElementById("selected-benefits");if(!host||!planBenefits[key])return;const [intro,...benefits]=planBenefits[key];const p=document.createElement("p");p.textContent=intro;const ul=document.createElement("ul");ul.className="neon-plan-benefits";for(const benefit of benefits){const li=document.createElement("li");li.textContent=benefit;ul.append(li);}const note=document.createElement("small");note.className="neon-plan-note";note.textContent="Benefícios previstos; disponibilidade e exclusividade sujeitas à implementação.";host.replaceChildren(p,ul,note);}

@@ -6,8 +6,8 @@
   <meta name="robots" content="noindex">
   <title>ZYNOX | Assinaturas</title>
   <link rel="stylesheet" href="/plans.css">
-  <script src="/plans.js" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=1"></head>
+  <script src="/plans.js?v=5" defer></script>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=5"></head>
 
 <body>
 
@@ -54,13 +54,7 @@
           <strong>R$ 4,90</strong>
         </div>
 
-        <ul>
-          <li>Bot de vendas</li>
-          <li>Gerenciamento de produtos</li>
-          <li>Estoque digital</li>
-          <li>Entrega automatizada</li>
-          <li>Painel de gerenciamento</li>
-        </ul>
+        <ul class="neon-plan-benefits"><li>Bot de vendas</li><li>Produtos e estoque digital</li><li>Entrega após confirmação do pagamento</li><li>Painel de gerenciamento</li></ul>
 
         <button data-plan="starter">
           Selecionar Starter
@@ -81,13 +75,7 @@
           <strong>R$ 7,90</strong>
         </div>
 
-        <ul>
-          <li>Recursos do Starter</li>
-          <li>Automações avançadas</li>
-          <li>Cupons e ofertas</li>
-          <li>Relatórios de vendas</li>
-          <li>Integrações financeiras</li>
-        </ul>
+        <ul class="neon-plan-benefits"><li>Tudo do Starter</li><li>Cupons e ofertas</li><li>Automações avançadas planejadas</li><li>Relatórios e integrações adicionais planejados</li></ul>
 
         <button data-plan="pro">
           Selecionar Pro
@@ -108,13 +96,7 @@
           <strong>R$ 12,90</strong>
         </div>
 
-        <ul>
-          <li>Recursos do Pro</li>
-          <li>Zynox AI</li>
-          <li>Relatórios avançados</li>
-          <li>Integrações adicionais</li>
-          <li>Suporte prioritário</li>
-        </ul>
+        <ul class="neon-plan-benefits"><li>Tudo do Pro</li><li>ZYNOX AI conforme disponibilidade</li><li>Relatórios e integrações avançados planejados</li><li>Suporte prioritário planejado</li></ul>
 
         <button data-plan="premium">
           Selecionar Premium
@@ -125,7 +107,7 @@
     </section>
 
     <p class="pricing-notice">
-      Valores e benefícios provisórios.
+      Valores e benefícios previstos e provisórios; exclusividade por plano sujeita à implementação.
       Compras ainda indisponíveis.
     </p>
 
@@ -139,7 +121,7 @@
         Selecione o período da sua assinatura.
       </p>
 
-      <div id="duration-options"></div>
+      <div id="selected-benefits"></div><div id="duration-options"></div>
 
       <button id="close-duration">
         Voltar aos planos
