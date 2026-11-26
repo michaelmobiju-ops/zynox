@@ -1,3 +1,4 @@
+import {botTokenForStore} from "./custom-bots.js";
 import {announceSale} from "./sale-notifications.js";
 const hex=s=>Uint8Array.from(String(s).match(/../g)||[],x=>parseInt(x,16));
 const json=(data,status=200)=>Response.json(data,{status});
@@ -11,7 +12,9 @@ export async function deliver(env,orderId){
  const order=await env.DB.prepare("SELECT o.*,c.discord_id,v.id variant_id,v.infinite_stock,p.name product_name,v.name variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=?").bind(orderId).first();
  if(!order)return "pending";
  if(order.status==="delivered"||order.delivered_at)return "delivered";
- if(order.status!=="paid"||!env.DISCORD_BOT_TOKEN||!env.STOCK_ENCRYPTION_KEY)return "pending";
+ if(order.status!=="paid"||!env.STOCK_ENCRYPTION_KEY)return "pending";
+ const botToken=await botTokenForStore(env,order.store_id);
+ if(!botToken)return "pending";
  const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND s.status=? LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock?"available":"reserved").first();
  if(!item)return "pending";
  const value=await decryptStock(item.key_encrypted,order.variant_id,env.STOCK_ENCRYPTION_KEY);
@@ -19,7 +22,7 @@ export async function deliver(env,orderId){
  const lock=await env.DB.prepare("UPDATE orders SET status='delivering' WHERE id=? AND status='paid' AND delivered_at IS NULL").bind(orderId).run();
  if(!lock.meta.changes)return "pending";
  const release=()=>env.DB.prepare("UPDATE orders SET status='paid' WHERE id=? AND status='delivering'").bind(orderId).run();
- const headers={Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"};
+ const headers={Authorization:"Bot "+botToken,"Content-Type":"application/json"};
  try{
   const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers,body:JSON.stringify({recipient_id:order.discord_id}),signal:AbortSignal.timeout(8000)});
   if(!dm.ok){await release();return "pending";}
