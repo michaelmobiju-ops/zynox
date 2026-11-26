@@ -1,3 +1,4 @@
+import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
@@ -14,6 +15,7 @@ export async function commerce(request,env,storeChannels){
  let body={};if(request.method==="POST"){try{body=await request.json()}catch{return fail("Dados inválidos.");}}
  const store=await env.DB.prepare("SELECT * FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||url.searchParams.get("store")||""),user.id).first();
  if(!store)return fail("Loja não encontrada.",404);
+ const expansion=await expansionApi(path,request,env,store,body,user);if(expansion)return expansion;
  const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
  if(path==="/api/commerce/ticket-panels"){
@@ -63,6 +65,10 @@ export async function commerce(request,env,storeChannels){
  if(path==="/api/commerce/integrations"&&request.method==="GET"){
   const gateways=await list("SELECT provider,status,is_primary FROM gateways WHERE store_id=?",store.id);
   return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(env.DISCORD_BOT_TOKEN)},gateways,features:{wallet:false,ai:false,real_payments:false}});
+ }
+ if(path==="/api/commerce/stock/summary"&&request.method==="GET"){
+ const rows=await list("SELECT p.id AS product_id,p.name AS product_name,v.id AS variant_id,v.name AS variant_name,v.infinite_stock,COUNT(CASE WHEN s.status='available' THEN 1 END) AS available,COUNT(CASE WHEN s.status='reserved' THEN 1 END) AS reserved,COUNT(CASE WHEN s.status='used' THEN 1 END) AS used FROM products p JOIN variants v ON v.product_id=p.id LEFT JOIN stock s ON s.variant_id=v.id WHERE p.store_id=? AND p.status!='archived' GROUP BY p.id,v.id ORDER BY p.name,v.name",store.id);
+ return json({variants:rows.map(row=>({...row,low_stock:!row.infinite_stock&&row.available<=5,out_of_stock:row.available===0})),low_stock_threshold:5});
  }
  if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
  if(path==="/api/commerce/products"&&request.method==="POST"){

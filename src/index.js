@@ -1,3 +1,5 @@
+import {ownerMetrics,monitor} from "./operations.js";
+import {publicApi} from "./public-api.js";
 import {storefront} from "./storefront.js";
 import {customBots} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
@@ -132,6 +134,9 @@ export default {
 
     try {
 
+      if (path === "/api/monitor/health") return monitor(request,env);
+      if (path === "/api/owner/metrics") return ownerMetrics(request,env);
+      if (path.startsWith("/api/v1/")) return publicApi(request,env);
       if (path.startsWith("/api/storefront/")) return storefront(request,env);
       if (/^\/loja\/[a-f0-9-]{36}\/?$/i.test(path)) return servePage(request,env,"/storefront.html");
 
