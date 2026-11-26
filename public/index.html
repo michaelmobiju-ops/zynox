@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#08080B">
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
-  <link rel="stylesheet" href="/style.css?v=reference-mobile-20261126-1">
-  <script src="/app.js?v=reference-mobile-20261126-1" defer></script>
+  <link rel="stylesheet" href="/style.css?v=login-space-20261126">
+  <script src="/app.js?v=login-space-20261126" defer></script>
 </head>
 <body>
 
@@ -234,26 +234,31 @@
 
 </main>
 
-<section id="login" class="login-page" hidden>
+<section id="login" class="login-page zynox-login-scene" hidden>
+  <div class="login-space" aria-hidden="true">
+    <span class="planet planet-large"></span><span class="planet planet-ringed"></span>
+    <span class="planet planet-small planet-a"></span><span class="planet planet-small planet-b"></span>
+    <span class="planet planet-small planet-c"></span><span class="orbital-path"></span>
+  </div>
   <div class="login-card login-redesign">
-    <div class="login-brand"><span class="brand-z">Z</span><span>ZYNOX</span></div>
-    <h2>Acesse sua conta</h2>
-    <p class="login-subtitle">Gerencie sua loja, vendas e automações.</p>
+    <div class="login-brand">
+      <span class="login-mark" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><defs><linearGradient id="loginZ" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bd6cff"/><stop offset=".5" stop-color="#6419da"/><stop offset="1" stop-color="#d29aff"/></linearGradient></defs><path d="M20 22H78C83 22 85 27 81 31L32 78H80L91 67V83C91 88 87 91 82 91H15C7 91 5 84 11 78L62 32H18L9 41V32C9 26 13 22 20 22Z" fill="url(#loginZ)"/></svg></span>
+      <span class="login-brand-name">ZYNOX</span>
+    </div>
+    <h2>Login</h2>
+    <p class="login-subtitle">Bem-vindo de volta! Acesse sua conta para continuar.</p>
     <form id="access-form">
       <label for="username">Usuário</label>
-      <input id="username" name="username" autocomplete="username" placeholder="Digite seu usuário" required>
+      <div class="login-field"><input id="username" name="username" autocomplete="username" placeholder="Nome de usuário" required><span aria-hidden="true">♙</span></div>
       <label for="password">Senha</label>
-      <div class="password-wrap">
-        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+      <div class="password-wrap login-field">
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required>
         <button id="toggle-password" class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button>
       </div>
       <button class="button login-submit" type="submit">Entrar</button>
     </form>
     <p id="login-message" role="status" aria-live="polite"></p>
-    <div class="login-divider"><span>ou</span></div>
-    <button class="button discord" type="button" onclick="discordLogin()">Entrar com Discord</button>
-    <p class="login-footnote">O acesso com usuário e senha é destinado a contas autorizadas. Assinantes entram pelo Discord.</p>
-    <a class="plans-link" href="/plans">Conhecer os planos</a>
+    <p class="login-discord-prompt">Não tem uma conta? <button type="button" class="login-discord-link" onclick="discordLogin()">Entrar com Discord</button></p>
     <button class="back" onclick="goHome()">Voltar à página inicial</button>
   </div>
 </section>
