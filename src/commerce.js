@@ -1,3 +1,4 @@
+import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
@@ -14,6 +15,7 @@ export async function commerce(request,env,storeChannels){
  let body={};if(request.method==="POST"){try{body=await request.json()}catch{return fail("Dados inválidos.");}}
  const store=await env.DB.prepare("SELECT * FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||url.searchParams.get("store")||""),user.id).first();
  if(!store)return fail("Loja não encontrada.",404);
+ const expansion=await expansionApi(path,request,env,store,body,user);if(expansion)return expansion;
  const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
  if(path==="/api/commerce/ticket-panels"){
