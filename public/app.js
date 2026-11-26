@@ -53,10 +53,12 @@ function showPage(page) {
 }
 
 function openLogin() {
+  setAccessMode(false);
   showPage("login");
 }
 
 function openAccess() {
+  setAccessMode(true);
   showPage("login");
 }
 
@@ -361,3 +363,7 @@ document.addEventListener(
   document.addEventListener("click",event=>{if(!menu.hidden&&!menu.contains(event.target)&&!trigger.contains(event.target))close();});
   document.addEventListener("keydown",event=>{if(event.key==="Escape")close();});
 })();
+
+function setAccessMode(access){const form=document.getElementById("access-form"),methods=document.getElementById("login-methods"),back=document.getElementById("back-methods");if(!form||!methods||!back)return;form.hidden=!access;methods.hidden=access;back.hidden=!access;if(!access){document.getElementById("password").value="";document.getElementById("login-message").textContent="";}}
+document.getElementById("choose-access")?.addEventListener("click",()=>{setAccessMode(true);document.getElementById("username")?.focus();});
+document.getElementById("back-methods")?.addEventListener("click",()=>{setAccessMode(false);document.getElementById("choose-access")?.focus();});

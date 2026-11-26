@@ -31,7 +31,7 @@ const pageNames = {
 let homeContent = "";
 const money = n => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
 function toast(message,success=false){
-  let host=element("zynox-toasts");if(!host){host=node("div");host.id="zynox-toasts";document.body.append(host);}
+  let host=element("zynox-toasts");if(!host){host=node("div");host.id="zynox-toasts";host.setAttribute("aria-live","polite");document.body.append(host);}
   const item=node("div",String(message||"Erro desconhecido"),"zynox-toast"+(success?" success":""));host.append(item);
   setTimeout(()=>item.remove(),7000);
 }
@@ -127,6 +127,7 @@ async function api(path, body) {
 
 function panel(title, description) {
   const box = node("section", undefined, "control-panel");
+  box.dataset.module = ZYNOX.currentPage || "home";
 
   box.appendChild(node("h2", title));
 
@@ -877,10 +878,7 @@ function navigate(page) {
   closeMenu();
 
   document.querySelectorAll("[data-page]").forEach(item => {
-    item.classList.toggle(
-      "active",
-      item.dataset.page === page
-    );
+    const active=item.dataset.page===page;item.classList.toggle("active",active);if(active)item.setAttribute("aria-current","page");else item.removeAttribute("aria-current");
   });
 
   const main = element("main-content");
@@ -904,7 +902,12 @@ function navigate(page) {
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),listing=node("div"),editor=node("div");
     let data={products:[],variants:[]},generation=0;
     const add=button("+ Adicionar produto",()=>openEditor(null));add.disabled=true;
-    box.append(add,status,editor,listing);main.append(box);
+    const search=input("Buscar produtos","search");search.setAttribute("aria-label","Buscar produtos");
+    const toolbar=node("div",undefined,"neon-product-toolbar");toolbar.append(search,add);
+    listing.classList.add("neon-product-grid");
+    const filter=()=>{const q=search.value.trim().toLocaleLowerCase("pt-BR");for(const card of listing.querySelectorAll("[data-product-name]"))card.hidden=!card.dataset.productName.includes(q);};
+    search.addEventListener("input",filter);
+    box.append(toolbar,status,editor,listing);main.append(box);
     async function load(){
       const id=stores.value,version=++generation;listing.replaceChildren();editor.replaceChildren();add.disabled=!id;
       if(!id){status.textContent="Selecione a loja.";return;}
@@ -912,12 +915,12 @@ function navigate(page) {
       const d=await api("/api/commerce/products?store="+encodeURIComponent(id));if(version!==generation)return;
       data=d;status.textContent=d.products.length+" produto(s) cadastrado(s).";
       for(const p of d.products){
-        const card=node("div",undefined,"control-item");card.style.borderLeft="4px solid "+p.color;
+        const card=node("div",undefined,"control-item");card.style.borderLeft="4px solid "+p.color;card.dataset.productName=String(p.name).toLocaleLowerCase("pt-BR");
         if(p.image_url){const img=node("img");img.src=p.image_url;img.alt="Imagem do produto";img.loading="lazy";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-width:220px;max-height:120px;object-fit:contain;border-radius:8px;";card.append(img);}
         card.append(node("h3",p.name),node("p",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status));
-        for(const v of d.variants.filter(v=>v.product_id===p.id))card.append(node("p",v.name+" — R$ "+(v.price_cents/100).toFixed(2).replace(".",",")+" • Estoque: "+(v.infinite_stock?"Infinito":v.available)));
+        for(const v of d.variants.filter(v=>v.product_id===p.id)){const line=node("div",undefined,"neon-variant");line.append(node("strong",v.name+" — "+money(v.price_cents)));const qty=Number(v.available);const state=v.infinite_stock?"available":qty===0?"empty":qty<=3?"low":"available";line.append(node("span","Estoque: "+(v.infinite_stock?"Infinito":v.available),"neon-stock "+state));card.append(line);}
         card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}),button("Excluir produto",async()=>{if(!await confirmInApp("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));listing.append(card);
-      }if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
+      }filter();if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
     }
     async function openEditor(product){
       const id=stores.value;if(!id)return;

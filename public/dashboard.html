@@ -6,8 +6,8 @@
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
   <link rel="stylesheet" href="/dashboard.css?v=brand-20261126-5">
-  <script src="/dashboard.js?v=fast-20261126-4" defer></script>
-</head>
+  <script src="/dashboard.js?v=neon-3" defer></script>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=3"></head>
 
 <body>
 
@@ -18,7 +18,7 @@
     <header class="topbar">
       <a href="/dashboard" class="logo"><img class="zynox-brand-image" src="/zynox-logo.svg" width="30" height="30" alt=""><span>ZYNOX</span></a>
 
-      <div class="profile"><button id="selected-server" data-page="servers" class="control-button">Servidores</button>
+      <button type="button" id="neon-collapse" aria-label="Recolher menu" aria-expanded="true">☰</button><div class="profile"><button id="selected-server" data-page="servers" class="control-button">Servidores</button>
         <span id="header-avatar" class="header-avatar" aria-label="Foto de perfil"></span><span id="username">Usuário</span>
         <span id="user-plan">Plano</span>
       </div>
@@ -26,11 +26,11 @@
 
     <div id="overlay" hidden></div>
 
-    <aside id="sidebar" hidden>
+    <aside id="sidebar">
 
       <div class="sidebar-header">
-        <h2><span class="zynox-brand-icon">Z</span> ZYNOX</h2>
-        <button id="close-menu">✕</button>
+        <h2><img src="/zynox-logo.svg" width="34" height="34" alt=""> ZYNOX</h2>
+        <button id="close-menu" aria-label="Fechar menu">✕</button>
       </div>
 
       <nav id="navigation" aria-label="Menu principal">
@@ -55,7 +55,7 @@
 
         <button data-icon="◈" data-page="payments">Notificações de vendas</button>
         <button data-icon="◇" data-page="gateways">Gateways e bancos</button>
-        <button data-icon="◉" data-page="wallet">Carteira digital</button>
+        <button data-icon="◉" data-page="wallet">Carteira digital · Em breve</button>
 
         <small>FERRAMENTAS</small>
         <button data-page="integrations" data-icon="◇">Integrações</button>
@@ -129,11 +129,12 @@
 
     </main>
 
+<nav class="neon-bottom-nav" aria-label="Navegação rápida"><button type="button" data-page="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/></svg>Início</button><button type="button" data-page="sales"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM8 15l3-4 3 2 3-5"/></svg>Vendas</button><button type="button" data-page="products"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8"/></svg>Produtos</button><button type="button" id="neon-more" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>Mais</button></nav>
     <button id="open-menu" aria-label="Abrir menu">
       ☰
     </button>
 
   </div>
 
-</body>
+<script src="/neon-nav.js?v=3" defer></script></body>
 </html>
