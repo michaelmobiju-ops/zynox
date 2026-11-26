@@ -481,3 +481,27 @@ body{background:#050817;color:#f6f6ff}
  .panel,.control-panel{padding:17px;border-radius:17px}
  #open-menu{width:53px;height:53px;border-radius:50%;bottom:calc(18px + env(safe-area-inset-bottom))}
 }
+
+
+/* Bot workspace, profile and inventory editor */
+.account-avatar{overflow:hidden;flex:none}
+.account-avatar img,#sidebar-profile-avatar img,.header-avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.sidebar-account{min-height:80px}
+#sidebar-profile-name{display:block;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sidebar-profile-role{color:#ac75ed}
+#navigation button[data-page]::before{font-family:Arial,system-ui,sans-serif;font-weight:500;font-style:normal}
+.zynox-bot-panel{max-width:860px;margin:auto}
+.zynox-bot-hero{padding:30px 22px;margin:18px 0 24px;border-radius:20px;background:radial-gradient(circle at 85% 15%,#6b2baa44,transparent 44%),linear-gradient(135deg,#1a102c,#0c1121);border:1px solid #56347d;text-align:center}
+.zynox-bot-symbol{width:78px;height:78px;display:grid;place-items:center;margin:0 auto 10px;border-radius:22px;background:linear-gradient(135deg,#a55de5,#5e19c0);font-weight:1000;font-size:55px;font-style:italic;color:#fff;transform:skew(-6deg)}
+.zynox-bot-name{font-size:23px;font-weight:800;letter-spacing:2px}
+.zynox-bot-hero p{margin:7px auto 0;max-width:400px}
+.zynox-bot-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+.zynox-bot-actions .control-button{display:flex;align-items:center;justify-content:center;min-height:48px;text-align:center;text-decoration:none}
+.zynox-bot-commands{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:22px 0}
+.zynox-bot-commands h3{width:100%;margin:0 0 7px}
+.zynox-bot-commands span{padding:9px 12px;border-radius:9px;background:#251737;border:1px solid #5e367e;color:#d5b3f6;font-weight:700}
+.stock-manager{margin-top:14px;border:1px solid #4a3566;border-radius:12px;padding:13px;background:#100e1b}
+.stock-manager summary{cursor:pointer;color:#d6a9f8;font-weight:700}
+.stock-key-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #28203a;overflow-wrap:anywhere}
+.stock-key-row .control-danger{padding:7px 12px;flex:none}
+@media(max-width:500px){.zynox-bot-actions{grid-template-columns:1fr}.zynox-bot-hero{padding:22px 14px}.stock-key-row{font-size:12px}}
