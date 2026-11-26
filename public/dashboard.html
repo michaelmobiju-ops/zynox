@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
-  <link rel="stylesheet" href="/dashboard.css?v=mobile-redesign-20261126">
-  <script src="/dashboard.js?v=mobile-redesign-20261126" defer></script>
+  <link rel="stylesheet" href="/dashboard.css?v=polish-20261126-3">
+  <script src="/dashboard.js?v=polish-20261126-3" defer></script>
 </head>
 
 <body>
@@ -50,9 +50,9 @@
 
         <button data-icon="⬡" data-page="products">Produtos</button>
 
-        <button data-icon="🛒" data-page="sales">Vendas</button>
+        <button data-icon="◫" data-page="sales">Vendas</button>
         <button data-icon="♧" data-page="coupons">Cupons e ofertas</button>
-        <button data-icon="♙" data-page="customers">Clientes</button>
+        <button data-icon="♧" data-page="customers">Clientes</button>
         <button data-icon="▣" data-page="tickets">Tickets</button>
 
         <small>FINANCEIRO</small>
@@ -62,7 +62,7 @@
         <button data-icon="◉" data-page="wallet">Carteira digital</button>
 
         <small>FERRAMENTAS</small>
-        <button data-page="automations" data-icon="⚡">Automações</button>
+        <button data-page="automations" data-icon="ϟ">Automações</button>
         <button data-page="integrations" data-icon="◇">Integrações</button>
 
         <button data-icon="✦" data-page="ai">Zynox AI</button>
@@ -70,7 +70,7 @@
 
         <small>CONTA</small>
 
-        <button data-icon="♕" data-page="plans">Atualizar plano</button>
+        <button data-icon="♢" data-page="plans">Atualizar plano</button>
         <button data-icon="⚙" data-page="settings">Configurações</button>
         <button data-icon="♧" data-page="support">Suporte</button>
         <button data-icon="◉" data-page="account">Minha conta e servidores</button>
@@ -81,7 +81,7 @@
           <button data-icon="♧" data-page="notifications">Notificações</button>
         </div>
 
-        <div class="sidebar-account" data-page="account"><span class="account-avatar">◉</span><span>Minha conta<small>Área do usuário</small></span><span>›</span></div>
+        <div class="sidebar-account" data-page="account" role="button" tabindex="0"><span id="sidebar-profile-avatar" class="account-avatar">◉</span><span><span id="sidebar-profile-name">Minha conta</span><small id="sidebar-profile-role">Assinante</small></span><span>›</span></div>
         <button id="logout" class="logout">
           Sair da conta
         </button>
