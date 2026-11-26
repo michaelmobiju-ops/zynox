@@ -1382,7 +1382,7 @@ function navigate(page) {
       profile.append(field("Apelido do bot",nickname),button("Salvar apelido",async()=>{await api("/api/commerce/bot-nickname",{store_id:storeSelect.value,nickname:nickname.value});toast("Apelido atualizado.",true);}));
     }
     storeSelect.addEventListener("change",()=>refresh().catch(e=>connection.textContent=e.message));
-    api("/api/commerce/stores").then(data=>{
+    api("/api/dashboard/summary?store=").then(data=>{
       const stores=data.stores||[];
       storeSelect.replaceChildren(...stores.map(st=>{const o=node("option",st.name);o.value=st.id;return o;}));
       if(ZYNOX.store&&stores.some(st=>st.id===ZYNOX.store.id))storeSelect.value=ZYNOX.store.id;
