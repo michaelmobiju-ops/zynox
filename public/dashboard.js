@@ -13,7 +13,6 @@ const pageNames = {
   sales: "Vendas",
   coupons: "Cupons e ofertas",
   customers: "Clientes",
-  automations: "Automações",
   tickets: "Tickets",
   payments: "Pagamentos",
   gateways: "Gateways e bancos",
@@ -254,7 +253,8 @@ function updateProfile() {
   }
 }
 
-function renderAccount(){
+function renderAccount(refresh=false){
+  if(refresh)element("main-content").replaceChildren();
   const box=panel("Minha conta","Seu perfil e informações da assinatura ZYNOX.");
   const hero=node("div",undefined,"account-hero");
   const profile=ZYNOX.discordProfile||{};
@@ -868,6 +868,7 @@ function navigate(page) {
   if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
 
   if (page === "stock") page="products";
+  if (page === "automations") page="integrations";
   if (page === "control" && !isAdmin()) return;
 
   ZYNOX.currentPage = page;
@@ -1347,7 +1348,7 @@ function navigate(page) {
     invite.rel = "noopener noreferrer";
     const nickname=input("Nome do bot neste servidor");nickname.maxLength=32;
     box.append(node("h3","Personalização por servidor"),node("p","Cada servidor pode definir um apelido próprio. Foto, banner e biografia do perfil do bot são compartilhados no Discord."),field("Apelido do bot",nickname),button("Salvar nome neste servidor",async()=>{if(!ZYNOX.store)throw Error("Selecione um servidor.");await api("/api/commerce/bot-nickname",{store_id:ZYNOX.store.id,nickname:nickname.value});toast("Nome atualizado no servidor.",true);}));
-    const actions=node("div",undefined,"zynox-bot-actions");actions.append(invite,button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver automações",()=>navigate("automations")));box.append(actions,node("p","Aplicação compartilhada da ZYNOX. As interações são via HTTP; o indicador online pode aparecer desligado."));const commands=node("div",undefined,"zynox-bot-commands");commands.append(node("h3","Comandos disponíveis"));for(const cmd of ["/ping","/zynox","/painel","/ajuda"])commands.append(node("span",cmd));box.append(commands);
+    const actions=node("div",undefined,"zynox-bot-actions");actions.append(invite,button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver vendas",()=>navigate("sales")));box.append(actions,node("p","Aplicação compartilhada da ZYNOX. As interações são via HTTP; o indicador online pode aparecer desligado."));const commands=node("div",undefined,"zynox-bot-commands");commands.append(node("h3","Comandos disponíveis"));for(const cmd of ["/ping","/zynox","/painel","/ajuda"])commands.append(node("span",cmd));box.append(commands);
     if (isOwner()) {
       const status = node("p","Verifique a conexão ou registre os comandos.");
       box.append(status,button("Verificar conexão",async()=>{
@@ -1441,7 +1442,7 @@ async function initialize() {
 
     ZYNOX.user = data.user;
     ZYNOX.subscription = data.subscription;
-    ZYNOX.discordProfile = data.discord_profile;
+    ZYNOX.discordProfile = null;
     try{const saved=JSON.parse(sessionStorage.getItem("zynox:store:"+ZYNOX.user.id)||"null");if(saved&&typeof saved.id==="string")ZYNOX.store=saved;}catch{}
 
     if (!isAdmin() && !ZYNOX.subscription) {
@@ -1463,6 +1464,7 @@ async function initialize() {
     }
     let savedPage="home";try{savedPage=sessionStorage.getItem("zynox:last-page")||"home";}catch{}
     navigate(pageNames[savedPage]?savedPage:"home");
+    api("/api/me/profile").then(result=>{if(result.discord_profile){ZYNOX.discordProfile=result.discord_profile;updateProfile();if(ZYNOX.currentPage==="account")renderAccount(true);}}).catch(()=>{});
 
   } catch (error) {
     const loading = element("loading");
