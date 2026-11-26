@@ -122,6 +122,24 @@ export async function commerce(request,env,storeChannels){
   const rows=await env.DB.prepare("SELECT id,status,created_at FROM stock WHERE variant_id=? ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
   return json({infinite:Boolean(variant.infinite_stock),items:rows.results});
  }
+ if(path==="/api/commerce/stock/replace"&&request.method==="POST"){
+  const variantId=String(body.variant_id||""),stockId=String(body.stock_id||""),value=String(body.key||"").trim();
+  if(!value||value.length>1000)return fail("Informe uma key válida (até 1000 caracteres).");
+  if(!env.STOCK_ENCRYPTION_KEY||env.STOCK_ENCRYPTION_KEY.length<32)return fail("Configure STOCK_ENCRYPTION_KEY na Cloudflare.",503);
+  const enc=new TextEncoder(),hex=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+  const material=await crypto.subtle.importKey("raw",enc.encode(env.STOCK_ENCRYPTION_KEY),"HKDF",false,["deriveKey"]);
+  const derive=(info,algorithm,usages)=>crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt:enc.encode("zynox-stock-v1"),info:enc.encode(info)},material,algorithm,false,usages);
+  const key=await derive("encryption",{name:"AES-GCM",length:256},["encrypt"]);
+  const mac=await derive("fingerprint",{name:"HMAC",hash:"SHA-256",length:256},["sign"]);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:enc.encode(variantId)},key,enc.encode(value));
+  const fingerprint=hex(await crypto.subtle.sign("HMAC",mac,enc.encode(variantId+"\\0"+value)));
+  try{
+   const result=await env.DB.prepare("UPDATE stock SET key_encrypted=?,key_fingerprint=? WHERE id=? AND variant_id=? AND status='available' AND EXISTS(SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND v.infinite_stock=0) AND NOT EXISTS(SELECT 1 FROM order_stock os WHERE os.stock_id=?)").bind(hex(iv)+":"+hex(encrypted),fingerprint,stockId,variantId,variantId,store.id,stockId).run();
+   if(!result.meta.changes)return fail("Key não editável: reservada, utilizada ou vinculada a pedido.",409);
+   return json({success:true});
+  }catch{return fail("Key já cadastrada nesta variação ou atualização indisponível.",409);}
+ }
  if(path==="/api/commerce/stock/remove"&&request.method==="POST"){
   const variantId=String(body.variant_id||""),stockId=String(body.stock_id||"");
   const result=await env.DB.prepare("DELETE FROM stock WHERE id=? AND variant_id=? AND status='available' AND EXISTS(SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND v.infinite_stock=0) AND NOT EXISTS(SELECT 1 FROM order_stock os WHERE os.stock_id=?)").bind(stockId,variantId,variantId,store.id,stockId).run();
