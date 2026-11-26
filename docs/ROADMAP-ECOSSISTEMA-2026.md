@@ -57,3 +57,9 @@ Data: 2026-11-26. Fonte: arquivos atuais da branch main. Este documento não cer
 - IA: provedor/API e autorização de custos; credencial como secret no Cloudflare.
 - Notificações agendadas: Cron Triggers/Queues ou mecanismo equivalente, com limites e deduplicação.
 - PDF/exportação e armazenamento: avaliar limites do Worker e serviços necessários.
+
+## Implementação incremental — etapa 2 (2026-11-26)
+- Rota dedicada `/discord/interactions/{application_id}` adicionada. A assinatura Ed25519 é verificada usando a chave pública registrada para a aplicação, antes de aceitar eventos. O `application_id` do payload deve corresponder à URL e o `guild_id` à loja vinculada.
+- O endpoint principal `/discord/interactions` mantém a chave e a aplicação ZYNOX; compatibilidade preservada.
+- A API de conexão agora devolve o endpoint específico do bot.
+- **Não concluído:** migração 0005 no D1 de produção; teste Discord Developer de validação de URL para bot próprio; publicação e entrega usando token do bot próprio; verificação E2E. Não informar a assinantes que já podem vender com bots próprios.
