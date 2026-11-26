@@ -6,14 +6,14 @@
   <meta name="theme-color" content="#08080B">
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
-  <link rel="stylesheet" href="/style.css?v=redesign-20261125-b">
-  <script src="/app.js?v=redesign-20261125-b" defer></script>
+  <link rel="stylesheet" href="/style.css?v=reference-mobile-20261126-1">
+  <script src="/app.js?v=reference-mobile-20261126-1" defer></script>
 </head>
 <body>
 
-<header class="header">
+<header class="header"><div class="mobile-menu-wrap"><button type="button" class="mobile-menu-trigger" id="mobile-menu-trigger" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-menu-panel"><span></span><span></span></button><nav class="mobile-menu-panel" id="mobile-menu-panel" hidden><a href="#recursos">Recursos</a><a href="#como-funciona">Como funciona</a><a href="#planos">Planos</a><a href="#faq">Perguntas frequentes</a><button type="button" onclick="openLogin()">Entrar na conta</button></nav></div>
   <a href="/" class="logo">
-    <span>Z</span>YNOX
+    <span class="zynox-symbol" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><defs><linearGradient id="zmark" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c568ff"/><stop offset=".5" stop-color="#7721e9"/><stop offset="1" stop-color="#b26aff"/></linearGradient></defs><path d="M20 22H78C83 22 85 27 81 31L32 78H80L91 67V83C91 88 87 91 82 91H15C7 91 5 84 11 78L62 32H18L9 41V32C9 26 13 22 20 22Z" fill="url(#zmark)"/></svg></span><span class="zynox-wordmark">ZYNOX</span>
   </a>
   <button class="button" onclick="openLogin()">
     Acessar
@@ -23,30 +23,27 @@
 <main id="landing">
 
   <section class="hero hero-v2">
-    <div class="hero-topline"><span class="pulse-dot"></span> PLATAFORMA PARA LOJAS NO DISCORD <span class="hero-arrow">↗</span></div>
-    <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+    <div class="hero-topline"><span class="hero-new">Novo</span><span>Painel ZYNOX para sua loja no Discord</span></div>
     <div class="hero-inner">
-      <span class="hero-eyebrow">AUTOMAÇÃO • CONTROLE • CRESCIMENTO</span>
-      <h1>O próximo nível <em>da sua loja</em> começa aqui.</h1>
-      <p>Produtos, pedidos, estoque e gestão do seu servidor em um painel feito para quem vende no Discord.</p>
+      <h1>O futuro da sua <em>loja no Discord</em> começa aqui</h1>
+      <p>Produtos, estoque, pedidos e automações. Tudo o que você precisa para gerenciar sua loja em um único lugar.</p>
       <div class="hero-actions">
-        <button class="button hero-primary" onclick="openLogin()">Começar com a ZYNOX <span>↗</span></button>
-        <a class="button hero-secondary" href="#recursos">Explorar recursos <span>↓</span></a>
+        <button class="button hero-primary" onclick="openLogin()">Começar agora</button>
+        <a class="button hero-secondary" href="#recursos">Conhecer a ZYNOX</a>
       </div>
-      <div class="hero-proof"><span class="proof-stars">✦ ✦ ✦</span> Sua operação, em um só lugar</div>
     </div>
-    <div class="product-showcase">
-      <div class="showcase-glow"></div>
-      <div class="showcase-top"><span class="showcase-brand"><b>✳</b> ZYNOX <small>PAINEL DE CONTROLE</small></span><span class="showcase-live"><i></i> DEMONSTRAÇÃO</span></div>
-      <div class="showcase-greeting"><small>VISÃO GERAL</small><strong>Seu negócio em movimento.</strong><span>Visualização ilustrativa • valores fictícios</span></div>
-      <div class="showcase-metrics">
-        <div class="showcase-metric"><small>RECEITA • EXEMPLO</small><strong>R$ 12.480</strong><span>↗ Resumo das vendas</span></div>
-        <div class="showcase-metric"><small>PEDIDOS • EXEMPLO</small><strong>248</strong><span>◈ Gestão centralizada</span></div>
+    <div class="mobile-showcase-frame">
+      <div class="mobile-showcase-top"><span class="mini-logo">✳ <strong>ZYNOX</strong></span><span>Visão geral · Demonstração</span></div>
+      <div class="mobile-showcase-title">Painel de vendas <span>✦</span></div>
+      <div class="mobile-showcase-stats">
+        <div><small>Receita ilustrativa</small><strong>R$ 12.480</strong><span>↗ Acompanhe seu faturamento</span></div>
+        <div><small>Pedidos ilustrativos</small><strong>248</strong><span>◈ Gerencie suas vendas</span></div>
+        <div><small>Produtos</small><strong>32</strong><span>▣ Estoque centralizado</span></div>
       </div>
-      <div class="showcase-chart"><div class="chart-heading"><span>DESEMPENHO DA LOJA</span><span>Últimos 7 dias</span></div><svg viewBox="0 0 340 120" role="img" aria-label="Gráfico ilustrativo de crescimento"><defs><linearGradient id="areaPurple" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#8c39fa" stop-opacity=".55"/><stop offset="1" stop-color="#8c39fa" stop-opacity="0"/></linearGradient></defs><path d="M0 105 C35 100 40 110 70 82 S120 88 145 62 S185 70 205 46 S250 58 275 26 S318 32 340 9 L340 120 L0 120Z" fill="url(#areaPurple)"/><path d="M0 105 C35 100 40 110 70 82 S120 88 145 62 S185 70 205 46 S250 58 275 26 S318 32 340 9" fill="none" stroke="#ae64ff" stroke-width="3" stroke-linecap="round"/></svg><div class="chart-days"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div></div>
-      <div class="showcase-bottom"><span>◈ Produtos</span><span>▣ Estoque</span><span>◇ Clientes</span></div>
+      <div class="mobile-showcase-graph"><div class="graph-caption">Desempenho <span>Últimos 7 dias</span></div><svg viewBox="0 0 330 115" role="img" aria-label="Gráfico ilustrativo"><defs><linearGradient id="mobile-chart-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a45bff" stop-opacity=".45"/><stop offset="1" stop-color="#a45bff" stop-opacity="0"/></linearGradient></defs><path d="M0 95 Q30 110 60 78 T115 67 T175 49 T235 46 T290 20 T330 12 L330 115H0Z" fill="url(#mobile-chart-fill)"/><path d="M0 95 Q30 110 60 78 T115 67 T175 49 T235 46 T290 20 T330 12" fill="none" stroke="#ae68ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+      <div class="mobile-showcase-foot">PRODUTOS <span>ESTOQUE</span> CLIENTES <span>VENDAS</span></div>
     </div>
-    <div class="hero-bottom">CONHEÇA A PLATAFORMA <span>↓</span></div>
+    <div class="mobile-trust"><span>Feito para quem vende no Discord</span><div>✦ <strong>ZYNOX</strong> <span>•</span> GESTÃO DIGITAL <span>•</span> AUTOMAÇÃO</div></div>
   </section>
 
   <section id="recursos" class="section">
