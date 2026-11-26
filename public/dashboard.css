@@ -518,3 +518,9 @@ body{background:#050817;color:#f6f6ff}
 @media(prefers-reduced-motion:reduce){.loading-track span{animation:none;width:100%}}
 .sidebar-account{width:calc(100% - 10px);background:transparent;border:0;border-top:1px solid #512365;color:#fff;text-align:left;font:inherit;cursor:pointer}
 .sidebar-account:hover,.sidebar-account:focus-visible{background:#29183d;border-radius:12px;outline:1px solid #70439a}
+
+.zynox-brand-image{display:inline-block;width:30px;height:30px;object-fit:contain;vertical-align:middle;margin-right:6px}
+.loading-mark-image{filter:drop-shadow(0 8px 26px #9c39ef88);object-fit:contain}
+.zynox-bot-hero>img{display:block;margin:0 auto 14px;filter:drop-shadow(0 5px 20px #8b37f577)}
+.zynox-bot-panel input[type=file]{max-width:100%;padding:10px}
+.zynox-bot-panel textarea{width:100%;border:1px solid #50336b;background:#130e1d;color:white;border-radius:12px;padding:12px}
