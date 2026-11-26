@@ -1,3 +1,4 @@
+import {storefront} from "./storefront.js";
 import {customBots} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
 import {cart} from "./cart.js";
@@ -130,6 +131,9 @@ export default {
     const path = url.pathname;
 
     try {
+
+      if (path.startsWith("/api/storefront/")) return storefront(request,env);
+      if (/^\/loja\/[a-f0-9-]{36}\/?$/i.test(path)) return servePage(request,env,"/storefront.html");
 
       if (path === "/webhooks/payments") return await paymentWebhook(request,env);
 
