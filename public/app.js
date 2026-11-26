@@ -48,6 +48,7 @@ function showPage(page) {
     }
   });
 
+  document.body.classList.toggle("login-active", page === "login");
   window.scrollTo(0, 0);
 }
 
