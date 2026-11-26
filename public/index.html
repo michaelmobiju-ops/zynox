@@ -7,8 +7,8 @@
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
   <link rel="stylesheet" href="/style.css?v=ecosystem-20261126-1">
-  <script src="/app.js?v=refine-20261126-2" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=1"></head>
+  <script src="/app.js?v=neon-2" defer></script>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=2"></head>
 <body>
 
 <header class="header"><div class="mobile-menu-wrap"><button type="button" class="mobile-menu-trigger" id="mobile-menu-trigger" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-menu-panel"><span></span><span></span></button><nav class="mobile-menu-panel" id="mobile-menu-panel" hidden><a href="#recursos">Recursos</a><a href="#como-funciona">Como funciona</a><a href="#planos">Planos</a><a href="#faq">Perguntas frequentes</a><button type="button" onclick="openLogin()">Entrar na conta</button></nav></div>
@@ -40,7 +40,7 @@
         <div><small>Pedidos</small><strong>—</strong><span>◈ Gerencie suas vendas</span></div>
         <div><small>Produtos</small><strong>—</strong><span>▣ Estoque centralizado</span></div>
       </div>
-      <div class="mobile-showcase-graph"><div class="graph-caption">Desempenho <span>Últimos 7 dias</span></div><svg viewBox="0 0 330 115" role="img" aria-label="Gráfico ilustrativo"><defs><linearGradient id="mobile-chart-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a45bff" stop-opacity=".45"/><stop offset="1" stop-color="#a45bff" stop-opacity="0"/></linearGradient></defs><path d="M0 95 Q30 110 60 78 T115 67 T175 49 T235 46 T290 20 T330 12 L330 115H0Z" fill="url(#mobile-chart-fill)"/><path d="M0 95 Q30 110 60 78 T115 67 T175 49 T235 46 T290 20 T330 12" fill="none" stroke="#ae68ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+      <div class="mobile-showcase-graph"><div class="graph-caption">Desempenho <span>Demonstração da interface</span></div><div class="neon-empty-chart">Os dados reais aparecem após acessar sua loja.</div></div>
       <div class="mobile-showcase-foot">PRODUTOS <span>ESTOQUE</span> CLIENTES <span>VENDAS</span></div>
     </div>
     <div class="mobile-trust"><span>Feito para quem vende no Discord</span><div>✦ <strong>ZYNOX</strong> <span>•</span> GESTÃO DIGITAL <span>•</span> AUTOMAÇÃO</div></div>
@@ -247,7 +247,7 @@
     </div>
     <h2>Login</h2>
     <p class="login-subtitle">Bem-vindo de volta! Acesse sua conta para continuar.</p>
-    <form id="access-form">
+    <div id="login-methods" class="neon-login-methods"><button type="button" class="discord-signin" onclick="discordLogin()">Login com Discord</button><button type="button" class="button" id="choose-access">Login de acesso</button></div><form id="access-form" hidden>
       <label for="username">Usuário</label>
       <div class="login-field"><input id="username" name="username" autocomplete="username" placeholder="Nome de usuário" required><span aria-hidden="true">♙</span></div>
       <label for="password">Senha</label>
@@ -258,7 +258,7 @@
       <button class="button login-submit" type="submit">Entrar</button>
     </form>
     <p id="login-message" role="status" aria-live="polite"></p>
-    <p class="login-discord-prompt">Não tem uma conta?</p><button type="button" class="discord-signin" onclick="discordLogin()"><svg viewBox="0 0 127.14 96.36" aria-hidden="true"><path fill="currentColor" d="M104.4 8.1A101.4 101.4 0 0 0 79.3 0a72 72 0 0 0-3.2 6.6 94 94 0 0 0-28.2 0A72 72 0 0 0 44.7 0 101.4 101.4 0 0 0 19.6 8.1C3.7 31.6-.6 54.5 1.5 77.1a102 102 0 0 0 31 15.5c2.5-3.4 4.8-7 6.8-10.8a65 65 0 0 1-10.7-5.2l2.6-2.1a72 72 0 0 0 64.7 0l2.6 2.1a65 65 0 0 1-10.7 5.2c2 3.8 4.3 7.4 6.8 10.8a102 102 0 0 0 31-15.5c2.5-26.2-4.3-48.9-18.1-69ZM42.4 63.2c-6.1 0-11.1-5.6-11.1-12.5s4.9-12.5 11.1-12.5c6.2 0 11.2 5.6 11.1 12.5 0 6.9-4.9 12.5-11.1 12.5Zm42.3 0c-6.1 0-11.1-5.6-11.1-12.5s4.9-12.5 11.1-12.5c6.2 0 11.2 5.6 11.1 12.5 0 6.9-4.9 12.5-11.1 12.5Z"/></svg><span>Entrar com Discord</span></button>
+    <button type="button" class="back" id="back-methods" hidden>Voltar aos métodos de login</button>
     <button class="back" onclick="goHome()">Voltar à página inicial</button>
   </div>
 </section>
@@ -274,7 +274,7 @@
 </section>
 
 <footer>
-  <div class="logo">ZYNOX</div>
+  <div class="logo"><img src="/zynox-logo.svg" width="32" height="32" alt=""> ZYNOX</div>
   <p>Automação inteligente de vendas digitais.</p>
   <p>© 2026 ZYNOX.</p>
 </footer>

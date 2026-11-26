@@ -7,7 +7,7 @@
   <title>ZYNOX | Dashboard</title>
   <link rel="stylesheet" href="/dashboard.css?v=brand-20261126-5">
   <script src="/dashboard.js?v=fast-20261126-4" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=1"></head>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=2"></head>
 
 <body>
 
@@ -18,7 +18,7 @@
     <header class="topbar">
       <a href="/dashboard" class="logo"><img class="zynox-brand-image" src="/zynox-logo.svg" width="30" height="30" alt=""><span>ZYNOX</span></a>
 
-      <div class="profile"><button id="selected-server" data-page="servers" class="control-button">Servidores</button>
+      <button type="button" id="neon-collapse" aria-label="Recolher menu" aria-expanded="true">☰</button><div class="profile"><button id="selected-server" data-page="servers" class="control-button">Servidores</button>
         <span id="header-avatar" class="header-avatar" aria-label="Foto de perfil"></span><span id="username">Usuário</span>
         <span id="user-plan">Plano</span>
       </div>
@@ -26,7 +26,7 @@
 
     <div id="overlay" hidden></div>
 
-    <aside id="sidebar" hidden>
+    <aside id="sidebar">
 
       <div class="sidebar-header">
         <h2><img src="/zynox-logo.svg" width="34" height="34" alt=""> ZYNOX</h2>
@@ -136,5 +136,5 @@
 
   </div>
 
-<script src="/neon-nav.js" defer></script></body>
+<script src="/neon-nav.js?v=2" defer></script></body>
 </html>
