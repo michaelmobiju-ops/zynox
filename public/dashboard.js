@@ -1337,14 +1337,16 @@ function navigate(page) {
   }
 
   if (page === "bot") {
-    const box = panel("Meu bot", "Integração com o Discord");
+    const box = panel("Meu bot", "Configure seu assistente de vendas no Discord.");
+    box.classList.add("zynox-bot-panel");
+    const hero=node("div",undefined,"zynox-bot-hero");hero.append(node("div","Z","zynox-bot-symbol"),node("div","ZYNOX BOT","zynox-bot-name"),node("p","Gerencie o apelido, a conexão e os comandos do seu bot em um só lugar."));box.append(hero);
     const invite = node("a","Adicionar bot ao servidor","control-button");
     invite.href = "https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=84992&scope=bot%20applications.commands";
     invite.target = "_blank";
     invite.rel = "noopener noreferrer";
     const nickname=input("Nome do bot neste servidor");nickname.maxLength=32;
     box.append(node("h3","Personalização por servidor"),node("p","Cada servidor pode definir um apelido próprio. Foto, banner e biografia do perfil do bot são compartilhados no Discord."),field("Apelido do bot",nickname),button("Salvar nome neste servidor",async()=>{if(!ZYNOX.store)throw Error("Selecione um servidor.");await api("/api/commerce/bot-nickname",{store_id:ZYNOX.store.id,nickname:nickname.value});toast("Nome atualizado no servidor.",true);}));
-    box.append(invite,node("p","Aplicação compartilhada da ZYNOX. O bot usa interações HTTP; o indicador online do Discord pode aparecer desligado."),button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver automações",()=>navigate("automations")),node("h3","Comandos disponíveis"),node("p","/ping • /zynox • /painel • /ajuda"));
+    const actions=node("div",undefined,"zynox-bot-actions");actions.append(invite,button("Gerenciar servidores",()=>navigate("servers")),button("Gerenciar produtos",()=>navigate("products")),button("Ver automações",()=>navigate("automations")));box.append(actions,node("p","Aplicação compartilhada da ZYNOX. As interações são via HTTP; o indicador online pode aparecer desligado."));const commands=node("div",undefined,"zynox-bot-commands");commands.append(node("h3","Comandos disponíveis"));for(const cmd of ["/ping","/zynox","/painel","/ajuda"])commands.append(node("span",cmd));box.append(commands);
     if (isOwner()) {
       const status = node("p","Verifique a conexão ou registre os comandos.");
       box.append(status,button("Verificar conexão",async()=>{
