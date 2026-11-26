@@ -10,7 +10,6 @@ const pageNames = {
   bot: "Meu bot",
   servers: "Servidores",
   products: "Produtos",
-  stock: "Estoque",
   sales: "Vendas",
   coupons: "Cupons e ofertas",
   customers: "Clientes",
@@ -234,6 +233,9 @@ function updateProfile() {
       : "ASSINANTE";
 
   if(element("selected-server"))element("selected-server").textContent=ZYNOX.store?.name||"Servidores";
+  const sideAvatar=element("sidebar-profile-avatar");if(sideAvatar){sideAvatar.replaceChildren();if(ZYNOX.discordProfile?.avatar_url){const pic=node("img");pic.src=ZYNOX.discordProfile.avatar_url;pic.alt="Foto do Discord";sideAvatar.append(pic);}else sideAvatar.textContent=user.username.slice(0,1).toUpperCase();}
+  const sideName=element("sidebar-profile-name");if(sideName)sideName.textContent=ZYNOX.discordProfile?.display_name||user.username;
+  const sideRole=element("sidebar-profile-role");if(sideRole)sideRole.textContent=role;
   const headerAvatar=element("header-avatar");if(headerAvatar){headerAvatar.replaceChildren();if(ZYNOX.discordProfile?.avatar_url){const img=node("img");img.src=ZYNOX.discordProfile.avatar_url;img.alt="Foto de perfil";img.loading="lazy";headerAvatar.append(img);}else headerAvatar.textContent=user.username.slice(0,1).toUpperCase();}
   if (element("username")) {
     element("username").textContent = user.username;
@@ -863,8 +865,9 @@ async function loadHomeDashboard() {
 
 function navigate(page) {
   if (!pageNames[page]) return;
-  if (!ZYNOX.store && !["servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
+  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
 
+  if (page === "stock") page="products";
   if (page === "control" && !isAdmin()) return;
 
   ZYNOX.currentPage = page;
@@ -895,7 +898,7 @@ function navigate(page) {
     return;
   }
 
-  if (page === "products" || page === "stock") {
+  if (page === "products") {
     const box=panel("Produtos","Crie, edite e gerencie o estoque de cada produto em um só lugar.");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),listing=node("div"),editor=node("div");
     let data={products:[],variants:[]},generation=0;
@@ -929,6 +932,27 @@ function navigate(page) {
         n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
         const entry={id:v?.id,n,price,keys,infinite,row};variants.push(entry);
         const variantNameField=field("Nome da variação",n);row.append(variantNameField,field("Preço",price),node("p","Estoque disponível: "+(v?.infinite_stock?"Infinito":v?.available||0)),field("Adicionar keys",keys),field("Estoque infinito",infinite));
+        if(v){
+          const stockTools=node("details",undefined,"stock-manager"),stockList=node("div");
+          const stockTitle=node("summary","Gerenciar keys cadastradas");stockTools.append(stockTitle,stockList);
+          async function refreshKeys(){
+            stockList.replaceChildren(node("p","Carregando estoque..."));
+            const result=await api("/api/commerce/stock/list?store="+encodeURIComponent(id)+"&variant_id="+encodeURIComponent(v.id));
+            stockList.replaceChildren(node("p","Keys cadastradas: "+result.items.length+(result.items.length===150?" (mostrando as 150 mais recentes)":"")));
+            for(const item of result.items){
+              const line=node("div",undefined,"stock-key-row");
+              line.append(node("span","Key "+item.id.slice(0,8)+" • "+(item.status==="available"?"Disponível":item.status==="reserved"?"Reservada":"Utilizada")));
+              if(item.status==="available"&&!result.infinite)line.append(button("Remover",async()=>{
+                if(!await confirmInApp("Remover esta key do estoque? Essa ação não pode ser desfeita."))return;
+                await api("/api/commerce/stock/remove",{store_id:id,variant_id:v.id,stock_id:item.id});
+                await refreshKeys();
+              },true));
+              stockList.append(line);
+            }
+          }
+          stockTools.addEventListener("toggle",()=>{if(stockTools.open)refreshKeys().catch(e=>toast(e.message));});
+          row.append(stockTools);
+        }
         if(v)row.append(button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{if(variants.some(x=>x.keys.value.trim()))throw Error("Salve as novas keys antes de alterar o modo.");await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});await load();const updated=data.products.find(x=>x.id===product.id);if(updated)await openEditor(updated);}));
         else row.append(button("Remover variação",()=>{if(variants.length>1){variants.splice(variants.indexOf(entry),1);row.remove();}}));
         rows.append(row);
