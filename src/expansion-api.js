@@ -1,3 +1,4 @@
+import {configurationExport} from "./operations.js";
 import {hashApiKey,csvCell} from "./public-api.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
 export async function expansionApi(path,request,env,store,body,user){
@@ -68,6 +69,10 @@ export async function expansionApi(path,request,env,store,body,user){
  if(method==="GET")return json({drafts:(await db.prepare("SELECT id,title,created_at FROM giveaway_drafts WHERE store_id=? ORDER BY created_at DESC LIMIT 100").bind(store.id).all()).results});
  const title=typeof body.title==="string"?body.title.trim():"";if(!title||title.length>100)return json({error:"Título inválido."},400);
  const id=crypto.randomUUID();await db.prepare("INSERT INTO giveaway_drafts(id,store_id,title) VALUES(?,?,?)").bind(id,store.id,title).run();return json({id,status:"draft"},201);
+ }
+ if(path==="/api/commerce/configuration-export"&&method==="GET")return configurationExport(db,store);
+ if(path==="/api/commerce/module-summary"&&method==="GET"){
+ const row=await db.prepare("SELECT (SELECT COUNT(*) FROM products WHERE store_id=? AND status='active') AS products,(SELECT COUNT(*) FROM tickets WHERE store_id=? AND status='open') AS open_tickets,(SELECT COUNT(*) FROM orders WHERE store_id=? AND status='pending') AS pending_orders,(SELECT COUNT(*) FROM customers WHERE store_id=?) AS customers").bind(store.id,store.id,store.id,store.id).first();return json({summary:row});
  }
  return null;
 }
