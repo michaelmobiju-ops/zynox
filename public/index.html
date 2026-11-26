@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#08080B">
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
-  <link rel="stylesheet" href="/style.css?v=login-mobile-20261125">
-  <script src="/app.js?v=login-mobile-20261125" defer></script>
+  <link rel="stylesheet" href="/style.css?v=redesign-20261125-b">
+  <script src="/app.js?v=redesign-20261125-b" defer></script>
 </head>
 <body>
 
@@ -22,53 +22,35 @@
 
 <main id="landing">
 
-  <section class="hero">
-    <span class="tag">
-      O FUTURO DAS VENDAS DIGITAIS
-    </span>
-
-    <h1>
-      Sua loja. Suas regras.
-      <span>Infinitas possibilidades.</span>
-    </h1>
-
-    <p>
-      Transforme seu Discord em uma máquina de vendas.
-      Gerencie produtos, estoques e pedidos
-      em uma única plataforma.
-    </p>
-
-    <button class="button" onclick="openLogin()">
-      Começar agora
-    </button>
-
-    <a class="button secondary" href="#recursos">
-      Conhecer a plataforma
-    </a>
-
-    <div class="dashboard-preview">
-      <small>ZYNOX DASHBOARD — DEMONSTRAÇÃO</small>
-      <p>Faturamento mensal</p>
-      <h2>R$ 18.430,20</h2>
-      <span class="positive">+28,7%</span>
-
-      <svg viewBox="0 0 320 140" width="100%">
-        <defs>
-          <linearGradient id="chart" x2="0" y2="1">
-            <stop stop-color="#7135FF" stop-opacity=".6"/>
-            <stop offset="1" stop-color="#7135FF" stop-opacity="0"/>
-          </linearGradient>
-        </defs>
-        <path d="M0 120 L40 95 L80 105 L120 65 L160 80 L200 40 L240 55 L280 20 L320 5 V140 H0Z"
-          fill="url(#chart)"/>
-        <path d="M0 120 L40 95 L80 105 L120 65 L160 80 L200 40 L240 55 L280 20 L320 5"
-          fill="none" stroke="#C084FC" stroke-width="3"/>
-      </svg>
+  <section class="hero hero-v2">
+    <div class="hero-topline"><span class="pulse-dot"></span> PLATAFORMA PARA LOJAS NO DISCORD <span class="hero-arrow">↗</span></div>
+    <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+    <div class="hero-inner">
+      <span class="hero-eyebrow">AUTOMAÇÃO • CONTROLE • CRESCIMENTO</span>
+      <h1>O próximo nível <em>da sua loja</em> começa aqui.</h1>
+      <p>Produtos, pedidos, estoque e gestão do seu servidor em um painel feito para quem vende no Discord.</p>
+      <div class="hero-actions">
+        <button class="button hero-primary" onclick="openLogin()">Começar com a ZYNOX <span>↗</span></button>
+        <a class="button hero-secondary" href="#recursos">Explorar recursos <span>↓</span></a>
+      </div>
+      <div class="hero-proof"><span class="proof-stars">✦ ✦ ✦</span> Sua operação, em um só lugar</div>
     </div>
+    <div class="product-showcase">
+      <div class="showcase-glow"></div>
+      <div class="showcase-top"><span class="showcase-brand"><b>✳</b> ZYNOX <small>PAINEL DE CONTROLE</small></span><span class="showcase-live"><i></i> DEMONSTRAÇÃO</span></div>
+      <div class="showcase-greeting"><small>VISÃO GERAL</small><strong>Seu negócio em movimento.</strong><span>Visualização ilustrativa • valores fictícios</span></div>
+      <div class="showcase-metrics">
+        <div class="showcase-metric"><small>RECEITA • EXEMPLO</small><strong>R$ 12.480</strong><span>↗ Resumo das vendas</span></div>
+        <div class="showcase-metric"><small>PEDIDOS • EXEMPLO</small><strong>248</strong><span>◈ Gestão centralizada</span></div>
+      </div>
+      <div class="showcase-chart"><div class="chart-heading"><span>DESEMPENHO DA LOJA</span><span>Últimos 7 dias</span></div><svg viewBox="0 0 340 120" role="img" aria-label="Gráfico ilustrativo de crescimento"><defs><linearGradient id="areaPurple" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#8c39fa" stop-opacity=".55"/><stop offset="1" stop-color="#8c39fa" stop-opacity="0"/></linearGradient></defs><path d="M0 105 C35 100 40 110 70 82 S120 88 145 62 S185 70 205 46 S250 58 275 26 S318 32 340 9 L340 120 L0 120Z" fill="url(#areaPurple)"/><path d="M0 105 C35 100 40 110 70 82 S120 88 145 62 S185 70 205 46 S250 58 275 26 S318 32 340 9" fill="none" stroke="#ae64ff" stroke-width="3" stroke-linecap="round"/></svg><div class="chart-days"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div></div>
+      <div class="showcase-bottom"><span>◈ Produtos</span><span>▣ Estoque</span><span>◇ Clientes</span></div>
+    </div>
+    <div class="hero-bottom">CONHEÇA A PLATAFORMA <span>↓</span></div>
   </section>
 
   <section id="recursos" class="section">
-    <h2>Tudo que sua loja precisa</h2>
+    <span class="section-kicker">RECURSOS DA PLATAFORMA</span><h2>Menos tarefas.<br><span class="gradient-word">Mais controle.</span></h2>
     <p>Controle sua operação em um único lugar.</p>
 
     <div class="features">
@@ -168,7 +150,7 @@
   </section>
 
   <section class="section" id="planos">
-    <h2>Escolha seu plano</h2>
+    <span class="section-kicker">PLANOS E ASSINATURAS</span><h2>Seu próximo passo<br><span class="gradient-word">começa aqui.</span></h2>
     <p>Uma solução para cada etapa da sua loja.</p>
 
     <div class="features">
@@ -202,7 +184,7 @@
   </section>
 
   <section class="section" id="faq">
-    <h2>Perguntas frequentes</h2>
+    <span class="section-kicker">TIRE SUAS DÚVIDAS</span><h2>Perguntas frequentes</h2>
 
     <details>
       <summary>O que é a ZYNOX?</summary>
@@ -247,7 +229,7 @@
   </section>
 
   <section class="section final-cta">
-    <h2>Eleve sua loja ao próximo nível.</h2>
+    <span class="section-kicker">PRONTO PARA COMEÇAR?</span><h2>O futuro da sua loja<br><span class="gradient-word">é ZYNOX.</span></h2>
     <button class="button" onclick="openLogin()">
       Começar agora
     </button>
