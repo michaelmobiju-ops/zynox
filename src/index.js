@@ -1,3 +1,4 @@
+import {customBots} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
 import {cart} from "./cart.js";
 import {paymentWebhook} from "./payment-webhook.js";
@@ -512,6 +513,7 @@ export default {
         await env.SALE_IMAGES.put(key,bytes,{httpMetadata:{contentType:type},customMetadata:{storeId}});
         return json({url:url.origin+"/media/sales/"+key});
       }
+      if (path.startsWith("/api/custom-bot/")) return customBots(request,env);
       if (path === "/api/store/channels") return storeChannels(request,env);
       if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
 
