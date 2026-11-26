@@ -700,3 +700,39 @@ body.login-active .header,body.login-active footer {display:none!important}
  .planet-b {right:5%;top:80%}
 }
 @media(prefers-reduced-motion:reduce){.zynox-login-scene *{animation:none!important}}
+
+
+/* Public polish: refined logo, pricing, landing and compact mobile login */
+.header{background:#090711ed;border-color:#342040;box-shadow:0 9px 30px #0005}
+.header .logo{display:flex;align-items:center;gap:9px;letter-spacing:0;font-style:normal}
+.zynox-symbol{width:45px;height:45px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.zynox-symbol svg{display:block;width:100%;height:100%;filter:none}
+.zynox-wordmark{font-weight:900;letter-spacing:1px;color:#fff}
+.mobile-menu-trigger{border:1px solid #7d43b6!important;background:linear-gradient(135deg,#401063,#8d3bd1)!important;box-shadow:0 5px 14px #37105244!important}
+.mobile-menu-trigger span{height:2.5px!important;width:22px!important}
+.hero-v2{background:radial-gradient(ellipse at 80% 25%,#4e207c30,transparent 52%),radial-gradient(ellipse at 5% 70%,#43146a24,transparent 50%),#07050c}
+.hero-v2 h1{font-family:Arial,Helvetica,sans-serif;font-weight:800;line-height:1.1;letter-spacing:-1.5px}
+.hero-v2 h1 em{font-style:normal;background:linear-gradient(110deg,#fff,#caa2f3);background-clip:text;-webkit-background-clip:text;color:transparent}
+.hero-topline{border-color:#563274!important;background:#1b1029!important}
+.mobile-showcase-frame{box-shadow:0 20px 65px #3e116c35!important;border-color:#683596!important;background:linear-gradient(150deg,#251337,#100b1d)!important}
+#duration .login-card{max-width:440px;border:1px solid #5e3779;background:linear-gradient(155deg,#20122e,#0e0b18);box-shadow:0 18px 60px #0007}
+#duration-options{display:grid;gap:9px}
+#duration-options button{background:#20132d;color:#f6eafa;border:1px solid #653e81;border-radius:11px;padding:13px 10px;font-weight:700;box-shadow:none;white-space:normal;min-height:48px}
+#duration-options button:hover,#duration-options button:focus-visible{background:#43205c;border-color:#a15bd4}
+body.login-active{height:100dvh;overflow:hidden!important}
+body.login-active #landing,body.login-active #duration{display:none!important}
+.zynox-login-scene{height:100dvh;min-height:0!important;max-height:100dvh;padding:12px 16px!important;overflow:hidden!important}
+.zynox-login-scene .login-card{min-height:0!important;max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;padding:22px 23px!important;max-width:380px;border-radius:22px;gap:0}
+.zynox-login-scene .login-brand{margin-bottom:5px}
+.zynox-login-scene .login-mark{height:45px;width:45px}
+.zynox-login-scene .login-brand-name{font-size:12px;letter-spacing:3px}
+.zynox-login-scene .login-card h2{margin:5px 0 9px;font-size:20px}
+.zynox-login-scene .login-subtitle{margin:0 0 14px;font-size:12px}
+.zynox-login-scene .login-field input{height:43px;min-height:43px;margin-bottom:9px}
+.zynox-login-scene .login-submit{margin-top:6px;height:44px;margin-bottom:6px}
+.login-discord-prompt{margin:6px 0 8px;font-size:12px}
+.discord-signin{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:46px;background:#5865f2;color:#fff;border:1px solid #7983ff;border-radius:10px;font-size:14px;font-weight:800;box-shadow:0 5px 18px #222c8e3b}
+.discord-signin:hover{background:#4752c4}
+.discord-signin svg{width:23px;height:20px;flex:none}
+.zynox-login-scene .back{margin-top:7px;padding:7px}
+@media(max-height:640px){.zynox-login-scene .login-card{padding:10px 18px!important}.zynox-login-scene .login-mark{height:30px;width:30px}.zynox-login-scene .login-subtitle{margin-bottom:7px}.zynox-login-scene .login-field input{height:36px;min-height:36px;margin-bottom:5px}.zynox-login-scene .login-submit,.discord-signin{height:39px;min-height:39px}}
