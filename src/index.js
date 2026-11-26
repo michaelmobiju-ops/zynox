@@ -278,6 +278,13 @@ export default {
         const subscription =
           await getSubscription(env, user.id);
 
+        return json({authenticated:true,user,subscription,discord_profile:null});
+      }
+
+      if (path === "/api/me/profile") {
+        if(request.method!=="GET")return json({error:"Método não permitido."},405);
+        const user=await getSession(request,env);
+        if(!user)return json({error:"Autenticação necessária."},401);
         let discord_profile=null;
         if(user.discord_id&&env.DISCORD_BOT_TOKEN){
           try{
@@ -288,12 +295,7 @@ export default {
             }
           }catch{}
         }
-        return json({
-          authenticated: true,
-          user,
-          subscription,
-          discord_profile
-        });
+        return json({discord_profile});
       }
 
       // ZYNOX CONTROL
