@@ -48,3 +48,5 @@ input:focus,select:focus,textarea:focus{border-color:#C084FC}
 
 @media(max-width:760px){.topbar{padding-top:max(8px,env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))} .neon-bottom-nav{padding-bottom:max(8px,env(safe-area-inset-bottom))} input,select,textarea{font-size:16px} }
 :focus-visible{outline:2px solid #C084FC;outline-offset:3px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+.operations-dialog{width:min(90vw,420px);max-height:85dvh;overflow:auto;background:#14101D;color:white;border:1px solid #7C3AED;border-radius:18px;padding:24px}.operations-dialog::backdrop{background:#0009}.operations-dialog dt{color:#A1A1AA}.operations-dialog dd{margin:4px 0 16px}.operations-dialog form{margin-top:12px}

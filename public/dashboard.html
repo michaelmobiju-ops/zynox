@@ -7,7 +7,7 @@
   <title>ZYNOX | Dashboard</title>
   <link rel="stylesheet" href="/dashboard.css?v=brand-20261126-5">
   <script src="/dashboard.js?v=neon-4" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=4"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><script src="/pwa.js?v=1" defer></script></head>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=6"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><script src="/pwa.js?v=1" defer></script></head>
 
 <body>
 
@@ -76,7 +76,7 @@
         </div>
 
         <button type="button" class="sidebar-account" data-page="account" aria-label="Abrir minha conta"><span id="sidebar-profile-avatar" class="account-avatar">◉</span><span><span id="sidebar-profile-name">Minha conta</span><small id="sidebar-profile-role">Assinante</small></span><span>›</span></button>
-        <button type="button" id="shield-open">ZYNOX Shield</button><button id="logout" class="logout">
+        <button type="button" id="operations-open">ZYNOX Monitor</button><button type="button" id="shield-open">ZYNOX Shield</button><button id="logout" class="logout">
           Sair da conta
         </button>
 
@@ -136,5 +136,5 @@
 
   </div>
 
-<script src="/neon-nav.js?v=3" defer></script><dialog id="shield-dialog" aria-labelledby="shield-title" style="max-width:min(90vw,420px);width:100%;background:#14101D;color:white;border:1px solid #7C3AED;border-radius:18px;padding:24px"><h2 id="shield-title">ZYNOX Shield</h2><p id="shield-status" role="status" aria-live="polite"></p><div id="shield-sessions" style="max-height:40vh;overflow:auto"></div><button type="button" class="control-button" id="shield-revoke">Encerrar outras sessões</button><form method="dialog"><button class="control-button">Fechar</button></form></dialog><script src="/shield-ui.js?v=2" defer></script></body>
+<script src="/neon-nav.js?v=3" defer></script><dialog id="shield-dialog" aria-labelledby="shield-title" style="max-width:min(90vw,420px);width:100%;background:#14101D;color:white;border:1px solid #7C3AED;border-radius:18px;padding:24px"><h2 id="shield-title">ZYNOX Shield</h2><p id="shield-status" role="status" aria-live="polite"></p><div id="shield-sessions" style="max-height:40vh;overflow:auto"></div><button type="button" class="control-button" id="shield-revoke">Encerrar outras sessões</button><form method="dialog"><button class="control-button">Fechar</button></form></dialog><script src="/shield-ui.js?v=2" defer></script><dialog id="operations-dialog" aria-labelledby="operations-title" class="operations-dialog"><h2 id="operations-title">ZYNOX Monitor</h2><p id="operations-status" role="status" aria-live="polite"></p><dl id="operations-metrics"></dl><button type="button" id="operations-refresh" class="control-button">Atualizar</button><form method="dialog"><button class="control-button">Fechar</button></form></dialog><script src="/operations-ui.js?v=1" defer></script></body>
 </html>
