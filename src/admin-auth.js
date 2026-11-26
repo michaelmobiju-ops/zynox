@@ -99,6 +99,8 @@ export async function verifyPassword(
   if (
     parts.length !== 4 ||
     parts[0] !== "pbkdf2" ||
+    !/^[a-f0-9]{64}$/.test(parts[2]) ||
+    !/^[a-f0-9]{64}$/.test(parts[3]) ||
     Number(parts[1]) !== ITERATIONS
   ) {
     return false;
@@ -183,6 +185,9 @@ export async function adminLogin(request, env) {
       error: "Usuário ou senha incorretos."
     }, 401);
   }
+
+  const accountRate = await env.LOGIN_RATE_LIMITER.limit({key:"account:"+await sha256(username)});
+  if(!accountRate.success)return json({error:"Muitas tentativas. Aguarde um minuto."},429);
 
   const user = await env.DB.prepare(`
     SELECT
