@@ -415,3 +415,69 @@ body.server-selection-mode .topbar{border-bottom:1px solid #2e2440}
 .zynox-notification-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0 20px}.zynox-notification-preset{background:linear-gradient(145deg,#27163f,#130e22);color:#fff;text-align:left;display:flex;flex-direction:column;gap:12px;min-height:130px;border:1px solid #7642ad;border-radius:14px;padding:15px;cursor:pointer;font:inherit}.zynox-notification-preset[data-style="compact"]{background:linear-gradient(145deg,#372150,#1a0f2b)}.zynox-notification-preset[data-style="premium"]{background:linear-gradient(145deg,#4a237c,#1b1233);border-color:#b68bfa}.zynox-notification-preset[aria-pressed="true"]{outline:3px solid #bb86fc;box-shadow:0 0 16px #7135ff66}.zynox-notification-preset strong{font-size:16px}.zynox-notification-preset span{font-size:14px}.zynox-notification-preset small{color:#d9c9eb;font-size:12px}
 
 .zynox-notification-preset{padding:8px;min-height:0;gap:8px;text-align:center}.zynox-notification-preset img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:9px;display:block}.zynox-notification-preset strong{padding:3px 5px 7px}
+
+
+/* Unified ZYNOX mobile dashboard design: midnight cards + logo purple */
+:root{--bg:#050817;--card:#0d1224;--purple:#7924d8;--lilac:#ac75ed;--muted:#9ca5bf;--border:#1d2540;--zynox-accent:#832de0}
+body{background:#050817;color:#f6f6ff}
+.topbar{background:#070a18f5;border-color:#171d33;box-shadow:0 2px 22px #02040c88}
+.logo{display:inline-flex;align-items:center;gap:9px;letter-spacing:0;color:#fff;font-weight:800;font-size:22px}
+.zynox-brand-icon{font-family:Outfit,system-ui,sans-serif;font-size:32px;line-height:1;font-weight:1000;font-style:italic;letter-spacing:-6px;padding-right:7px;background:linear-gradient(130deg,#5f1fce,#bb80ef 55%,#651cc6);color:transparent;background-clip:text;-webkit-background-clip:text}
+#main-content{max-width:1150px}
+.welcome{position:relative;padding:25px 22px;background:transparent;border:0;border-radius:0;margin-bottom:12px}
+.welcome .tag{color:#a782eb}
+.welcome h1{font-family:Outfit,system-ui,sans-serif;font-weight:700;letter-spacing:-.5px;font-size:clamp(23px,4vw,34px);margin:9px 0}
+.welcome p{color:#a1aac2}
+.welcome-avatar{position:absolute;right:16px;top:20px;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:#242045;color:#b587f2;border:1px solid #493876;font-size:24px}
+.metric,.panel,.control-panel,.control-item,.control-stat{background:#0d1224;border:1px solid #1b243a;border-radius:17px;box-shadow:0 8px 28px #03061330}
+.metric{min-height:136px;gap:10px;padding:18px}
+.metric span{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:#8994b1}
+.metric strong{font-family:Outfit,system-ui,sans-serif;font-size:clamp(22px,4vw,32px);letter-spacing:-1px}
+.metric small{font-size:11px;color:#8f9ab5}
+.metrics{gap:11px}
+.panel{padding:21px;margin-bottom:15px}
+.panel h2,.control-panel h2{font-family:Outfit,system-ui,sans-serif;font-size:18px}
+.chart{background:linear-gradient(180deg,#23124470,#0d122400),repeating-linear-gradient(0deg,transparent 0,transparent 42px,#222a423b 43px,transparent 44px);border-radius:14px;min-height:180px}
+.control-button,.login-submit{background:linear-gradient(110deg,#6922ce,#9855e8);border-color:#9e5fe577;box-shadow:none;border-radius:12px}
+.control-button:hover{background:#873bd6}
+.control-input,input,select,textarea{background:#090e1e;border-color:#29304a;color:#f9f7ff}
+.control-input:focus{border-color:#8651c7;box-shadow:0 0 0 3px #7530bd20}
+#sidebar{background:#050409;border-right:1px solid #502079;box-shadow:12px 0 50px #000a;width:min(350px,90vw)}
+.sidebar-header{padding:24px 22px 16px;border-color:#44204f}
+.sidebar-header h2{display:flex;align-items:center;gap:9px;font-size:23px;color:#fff;letter-spacing:0}
+#close-menu{background:#160c22;color:#bf8dea;border-color:#4d246a;font-size:20px}
+#navigation{padding:15px 14px 28px}
+#navigation small{color:#a35ad6;font-size:12px;letter-spacing:1.4px;font-weight:800;margin:21px 14px 10px;display:flex;align-items:center;gap:12px}
+#navigation small::after{content:"";height:1px;background:#58266d;flex:1}
+#navigation button[data-page]{position:relative;display:flex;align-items:center;gap:15px;border-radius:11px;padding:11px 15px;margin:3px 0;color:#e8dfee;font-size:15px;min-height:46px}
+#navigation button[data-page]::before{content:attr(data-icon);display:inline-grid;place-items:center;width:25px;font-size:23px;color:#ac7cda;flex-shrink:0}
+#navigation button[data-page]:hover{background:#251037;color:#fff}
+#navigation button[data-page].active{background:linear-gradient(95deg,#7223b7,#3d145d);color:#fff;border:1px solid #7d3eaa;box-shadow:none}
+#navigation button[data-page].active::before{color:#fff}
+.sidebar-account{display:flex;align-items:center;gap:14px;padding:17px 9px;margin:22px 5px 6px;border-top:1px solid #512365;color:#fff;cursor:pointer;font-weight:700}
+.sidebar-account>span:nth-child(2){flex:1}
+.sidebar-account small{margin:0!important;display:block!important;color:#ac75ed!important;font-size:12px!important;letter-spacing:0!important;font-weight:400!important}
+.sidebar-account small::after{display:none!important}
+.account-avatar{width:45px;height:45px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#7322b9,#28103c);border:1px solid #954fc8;font-size:25px;color:#e5c4ff}
+#open-menu{background:linear-gradient(130deg,#6a1bc3,#9650dd);border:1px solid #9456d1;box-shadow:0 6px 24px #3c156d50}
+#user-plan{background:#35164d;color:#c993ef;border-color:#663486}
+#selected-server{background:#25123d}
+@media(max-width:600px){
+ body{font-size:14px}
+ .topbar{padding:12px 17px;gap:9px}
+ .topbar .logo{font-size:18px}
+ .topbar .zynox-brand-icon{font-size:25px}
+ .profile{gap:7px}
+ #selected-server{max-width:115px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:9px;font-size:11px}
+ #username{display:none}
+ #main-content{padding:15px 18px calc(105px + env(safe-area-inset-bottom))}
+ .welcome{padding:13px 4px 20px}
+ .welcome h1{font-size:24px;padding-right:40px}
+ .welcome p{font-size:13px}
+ .welcome-avatar{top:12px;right:4px;width:40px;height:40px}
+ .metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .metric{padding:15px;min-height:125px}
+ .metric strong{font-size:24px}
+ .panel,.control-panel{padding:17px;border-radius:17px}
+ #open-menu{width:53px;height:53px;border-radius:50%;bottom:calc(18px + env(safe-area-inset-bottom))}
+}
