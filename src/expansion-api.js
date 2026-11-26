@@ -1,3 +1,4 @@
+import {hashApiKey,csvCell} from "./public-api.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
 export async function expansionApi(path,request,env,store,body,user){
  const db=env.DB,method=request.method;
@@ -44,6 +45,29 @@ export async function expansionApi(path,request,env,store,body,user){
  const title=typeof body.title==="string"?body.title.trim():"",message=typeof body.message==="string"?body.message.trim():"";
  if(!title||title.length>100||!message||message.length>2000)return json({error:"Campanha inválida."},400);
  const id=crypto.randomUUID();await db.prepare("INSERT INTO marketing_campaigns(id,store_id,title,message) VALUES(?,?,?,?)").bind(id,store.id,title,message).run();return json({id,status:"draft"},201);
+ }
+ if(path==="/api/commerce/reward-settings"){
+ if(method==="GET")return json({settings:await db.prepare("SELECT points_per_real FROM reward_settings WHERE store_id=?").bind(store.id).first()});
+ if(!Number.isInteger(body.points_per_real)||body.points_per_real<0||body.points_per_real>100)return json({error:"Regra inválida."},400);
+ await db.prepare("INSERT INTO reward_settings VALUES(?,?) ON CONFLICT(store_id) DO UPDATE SET points_per_real=excluded.points_per_real").bind(store.id,body.points_per_real).run();return json({success:true,earning_enabled:false});
+ }
+ if(path==="/api/commerce/pay-summary"&&method==="GET"){
+ const summary=await db.prepare("SELECT COALESCE(SUM(CASE WHEN status='confirmed' THEN amount_cents ELSE 0 END),0) AS confirmed_cents,COALESCE(SUM(CASE WHEN status='pending' THEN amount_cents ELSE 0 END),0) AS pending_cents,COUNT(CASE WHEN status='confirmed' THEN 1 END) AS confirmed_count FROM manual_pix_orders WHERE store_id=?").bind(store.id).first();return json({manual_pix:summary});
+ }
+ if(path==="/api/commerce/api-keys"){
+ if(method==="GET")return json({keys:(await db.prepare("SELECT id,revoked,created_at FROM external_api_keys WHERE store_id=? ORDER BY created_at DESC LIMIT 100").bind(store.id).all()).results});
+ if(body.revoke_id){const result=await db.prepare("UPDATE external_api_keys SET revoked=1 WHERE id=? AND store_id=? AND revoked=0").bind(String(body.revoke_id),store.id).run();return json({success:result.meta.changes===1});}
+ const id=crypto.randomUUID(),key="ZAPI-"+Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,"0")).join("");
+ await db.prepare("INSERT INTO external_api_keys(id,store_id,key_hash) VALUES(?,?,?)").bind(id,store.id,await hashApiKey(key)).run();return json({id,key,scope:"products:read"},201);
+ }
+ if(path==="/api/commerce/export-products"&&method==="GET"){
+ const rows=(await db.prepare("SELECT id,name,description,status FROM products WHERE store_id=? ORDER BY id LIMIT 1000").bind(store.id).all()).results;
+ return new Response(["id,name,description,status",...rows.map(r=>[r.id,r.name,r.description,r.status].map(csvCell).join(","))].join("\r\n"),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":"attachment; filename=products.csv","Cache-Control":"no-store"}});
+ }
+ if(path==="/api/commerce/giveaway-drafts"){
+ if(method==="GET")return json({drafts:(await db.prepare("SELECT id,title,created_at FROM giveaway_drafts WHERE store_id=? ORDER BY created_at DESC LIMIT 100").bind(store.id).all()).results});
+ const title=typeof body.title==="string"?body.title.trim():"";if(!title||title.length>100)return json({error:"Título inválido."},400);
+ const id=crypto.randomUUID();await db.prepare("INSERT INTO giveaway_drafts(id,store_id,title) VALUES(?,?,?)").bind(id,store.id,title).run();return json({id,status:"draft"},201);
  }
  return null;
 }
