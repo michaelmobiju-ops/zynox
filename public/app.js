@@ -348,3 +348,15 @@ document.addEventListener(
     checkSession();
   }
 );
+
+/* Mobile navigation for public landing */
+(function setupMobileNavigation(){
+  const trigger=document.getElementById("mobile-menu-trigger");
+  const menu=document.getElementById("mobile-menu-panel");
+  if(!trigger||!menu)return;
+  const close=()=>{menu.hidden=true;trigger.setAttribute("aria-expanded","false");};
+  trigger.addEventListener("click",()=>{const open=menu.hidden;menu.hidden=!open;trigger.setAttribute("aria-expanded",String(open));});
+  menu.querySelectorAll("a,button").forEach(el=>el.addEventListener("click",close));
+  document.addEventListener("click",event=>{if(!menu.hidden&&!menu.contains(event.target)&&!trigger.contains(event.target))close();});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape")close();});
+})();
