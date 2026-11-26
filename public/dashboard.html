@@ -5,16 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
-  <link rel="stylesheet" href="/dashboard.css?v=polish-20261126-3">
-  <script src="/dashboard.js?v=polish-20261126-3" defer></script>
+  <link rel="stylesheet" href="/dashboard.css?v=fast-20261126-4">
+  <script src="/dashboard.js?v=fast-20261126-4" defer></script>
 </head>
 
 <body>
 
-  <div id="loading">
-    <h1>ZYNOX</h1>
-    <p>Verificando acesso...</p>
-  </div>
+  <div id="loading" role="status" aria-live="polite"><div class="loading-mark">Z</div><div class="loading-wordmark">ZYNOX</div><div class="loading-track"><span></span></div><p>Preparando seu painel</p></div>
 
   <div id="app" hidden>
 
@@ -46,7 +43,6 @@
         <small>GERENCIAMENTO</small>
         <button data-page="servers" data-icon="◉">Servidores</button>
         <button data-page="bot" data-icon="▣">Meu bot</button>
-        <button data-page="stock" data-icon="▱">Estoque</button>
 
         <button data-icon="⬡" data-page="products">Produtos</button>
 
@@ -62,7 +58,6 @@
         <button data-icon="◉" data-page="wallet">Carteira digital</button>
 
         <small>FERRAMENTAS</small>
-        <button data-page="automations" data-icon="ϟ">Automações</button>
         <button data-page="integrations" data-icon="◇">Integrações</button>
 
         <button data-icon="✦" data-page="ai">Zynox AI</button>
@@ -73,7 +68,6 @@
         <button data-icon="♢" data-page="plans">Atualizar plano</button>
         <button data-icon="⚙" data-page="settings">Configurações</button>
         <button data-icon="♧" data-page="support">Suporte</button>
-        <button data-icon="◉" data-page="account">Minha conta e servidores</button>
 
         <div id="admin-navigation" hidden>
           <small>ADMINISTRAÇÃO</small>
@@ -81,7 +75,7 @@
           <button data-icon="♧" data-page="notifications">Notificações</button>
         </div>
 
-        <div class="sidebar-account" data-page="account" role="button" tabindex="0"><span id="sidebar-profile-avatar" class="account-avatar">◉</span><span><span id="sidebar-profile-name">Minha conta</span><small id="sidebar-profile-role">Assinante</small></span><span>›</span></div>
+        <button type="button" class="sidebar-account" data-page="account" aria-label="Abrir minha conta"><span id="sidebar-profile-avatar" class="account-avatar">◉</span><span><span id="sidebar-profile-name">Minha conta</span><small id="sidebar-profile-role">Assinante</small></span><span>›</span></button>
         <button id="logout" class="logout">
           Sair da conta
         </button>
