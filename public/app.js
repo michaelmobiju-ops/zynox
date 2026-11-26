@@ -10,7 +10,6 @@ const ZYNOX = {
 const pages = [
   "landing",
   "login",
-  "access",
   "duration"
 ];
 
@@ -57,7 +56,7 @@ function openLogin() {
 }
 
 function openAccess() {
-  showPage("access");
+  showPage("login");
 }
 
 function goHome() {
@@ -335,6 +334,15 @@ document.addEventListener(
   "DOMContentLoaded",
   () => {
     setupAccessForm();
+    const toggle = document.getElementById("toggle-password");
+    const password = document.getElementById("password");
+    toggle?.addEventListener("click", () => {
+      const visible = password.type === "password";
+      password.type = visible ? "text" : "password";
+      toggle.textContent = visible ? "Ocultar" : "Mostrar";
+      toggle.setAttribute("aria-pressed", String(visible));
+      toggle.setAttribute("aria-label", visible ? "Ocultar senha" : "Mostrar senha");
+    });
     setupFAQ();
     checkServer();
     checkSession();
