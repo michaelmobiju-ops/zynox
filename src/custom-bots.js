@@ -11,6 +11,13 @@ const hex=bytes=>Array.from(bytes,x=>x.toString(16).padStart(2,"0")).join("");
 const unhex=str=>Uint8Array.from(str.match(/../g)||[],x=>parseInt(x,16));
 async function seal(env,value){const iv=crypto.getRandomValues(new Uint8Array(12));const bytes=await crypto.subtle.encrypt({name:"AES-GCM",iv},await key(env),enc.encode(value));return hex(iv)+":"+hex(new Uint8Array(bytes));}
 export async function customBotToken(env,record){const [iv,data]=record.token_cipher.split(":");return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:unhex(iv)},await key(env),unhex(data)));}
+export async function botTokenForStore(env,storeId){
+ let record;
+ try{record=await env.DB.prepare("SELECT token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();}
+ catch(error){if(!String(error).includes("no such table"))throw error;return env.DISCORD_BOT_TOKEN||null;}
+ if(record)return customBotToken(env,record);
+ return env.DISCORD_BOT_TOKEN||null;
+}
 async function discord(token,path,options={}){
  const response=await fetch("https://discord.com/api/v10"+path,{...options,headers:{Authorization:"Bot "+token,...options.headers},signal:AbortSignal.timeout(9000)});
  const data=await response.json().catch(()=>({}));
