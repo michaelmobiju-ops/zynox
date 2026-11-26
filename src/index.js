@@ -1,3 +1,4 @@
+import {shield} from "./shield.js";
 import {storefront} from "./storefront.js";
 import {customBots} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
@@ -132,6 +133,7 @@ export default {
 
     try {
 
+      if (path.startsWith("/api/shield/")) return await shield(request,env);
       if (path.startsWith("/api/storefront/")) return storefront(request,env);
       if (/^\/loja\/[a-f0-9-]{36}\/?$/i.test(path)) return servePage(request,env,"/storefront.html");
 

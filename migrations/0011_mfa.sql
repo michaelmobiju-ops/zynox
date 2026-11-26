@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS user_mfa (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, secret_encrypted TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)), last_step INTEGER NOT NULL DEFAULT -1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS mfa_recovery_codes (user_id TEXT NOT NULL REFERENCES user_mfa(user_id) ON DELETE CASCADE, code_hash TEXT NOT NULL, used_at TEXT, PRIMARY KEY(user_id,code_hash));
