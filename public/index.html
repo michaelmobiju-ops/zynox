@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#08080B">
   <meta name="description" content="Automatize suas vendas no Discord com a ZYNOX.">
   <title>ZYNOX — Automação de vendas</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <link rel="stylesheet" href="/style.css?v=login-mobile-20261125">
+  <script src="/app.js?v=login-mobile-20261125" defer></script>
 </head>
 <body>
 
@@ -34,7 +34,7 @@
 
     <p>
       Transforme seu Discord em uma máquina de vendas.
-      Automatize pagamentos, produtos, estoques e entregas
+      Gerencie produtos, estoques e pedidos
       em uma única plataforma.
     </p>
 
@@ -75,7 +75,7 @@
 
       <article class="card">
         <h3>Bot de vendas</h3>
-        <p>Automatize suas vendas diretamente no Discord.</p>
+        <p>Gerencie anúncios e pedidos pelo Discord.</p>
       </article>
 
       <article class="card">
@@ -90,7 +90,7 @@
 
       <article class="card">
         <h3>Pagamentos Pix</h3>
-        <p>QR Code, copia e cola e confirmação automática.</p>
+        <p>Integrações Pix em desenvolvimento, sujeitas à configuração do provedor.</p>
       </article>
 
       <article class="card">
@@ -125,7 +125,7 @@
 
       <article class="card">
         <h3>ZYNOX Wallet</h3>
-        <p>Consulte saldos, recebimentos e movimentações.</p>
+        <p>Em breve.</p>
       </article>
 
       <article class="card">
@@ -162,7 +162,7 @@
 
       <article class="card">
         <h3>05 — Venda</h3>
-        <p>Automatize pagamentos e entregas digitais.</p>
+        <p>Prepare seu fluxo de pagamentos e entregas digitais.</p>
       </article>
     </div>
   </section>
@@ -231,7 +231,7 @@
 
     <details>
       <summary>Como recebo minhas vendas?</summary>
-      <p>Os pagamentos serão processados por provedores Pix compatíveis. Após a confirmação, a venda será registrada e o produto entregue. Os recebimentos poderão ser acompanhados pela ZYNOX Wallet, conforme as condições do provedor financeiro.</p>
+      <p>Os pagamentos serão processados por provedores Pix compatíveis. Após a confirmação, a venda será registrada e o produto entregue. A integração de pagamentos depende de um provedor compatível e de sua configuração.</p>
     </details>
 
     <details>
@@ -256,46 +256,26 @@
 </main>
 
 <section id="login" class="login-page" hidden>
-  <div class="login-card">
-    <div class="logo"><span>Z</span>YNOX</div>
+  <div class="login-card login-redesign">
+    <div class="login-brand"><span class="brand-z">Z</span><span>ZYNOX</span></div>
     <h2>Acesse sua conta</h2>
-
-    <button class="button discord" onclick="discordLogin()">
-      Login com Discord
-    </button>
-
-    <button class="button secondary" onclick="openAccess()">
-      Login de acesso
-    </button>
-
-    <button class="back" onclick="goHome()">
-      Voltar
-    </button>
-  </div>
-</section>
-
-<section id="access" class="login-page" hidden>
-  <div class="login-card">
-    <h2>Login de acesso</h2>
-
+    <p class="login-subtitle">Gerencie sua loja, vendas e automações.</p>
     <form id="access-form">
       <label for="username">Usuário</label>
-      <input id="username" autocomplete="username" required>
-
+      <input id="username" name="username" autocomplete="username" placeholder="Digite seu usuário" required>
       <label for="password">Senha</label>
-      <input id="password" type="password"
-        autocomplete="current-password" required>
-
-      <button class="button" type="submit">
-        Entrar
-      </button>
+      <div class="password-wrap">
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+        <button id="toggle-password" class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button>
+      </div>
+      <button class="button login-submit" type="submit">Entrar</button>
     </form>
-
-    <p id="login-message" role="status"></p>
-
-    <button class="back" onclick="openLogin()">
-      Voltar
-    </button>
+    <p id="login-message" role="status" aria-live="polite"></p>
+    <div class="login-divider"><span>ou</span></div>
+    <button class="button discord" type="button" onclick="discordLogin()">Entrar com Discord</button>
+    <p class="login-footnote">O acesso com usuário e senha é destinado a contas autorizadas. Assinantes entram pelo Discord.</p>
+    <a class="plans-link" href="/plans">Conhecer os planos</a>
+    <button class="back" onclick="goHome()">Voltar à página inicial</button>
   </div>
 </section>
 
