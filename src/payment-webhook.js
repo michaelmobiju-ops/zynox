@@ -3,7 +3,7 @@ import {botTokenForStore} from "./custom-bots.js";
 import {announceSale} from "./sale-notifications.js";
 const hex=s=>Uint8Array.from(String(s).match(/../g)||[],x=>parseInt(x,16));
 const json=(data,status=200)=>Response.json(data,{status});
-async function decryptStock(value,variantId,secret){
+export async function decryptStock(value,variantId,secret){
  const [ivHex,cipherHex]=String(value).split(":");
  const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),"HKDF",false,["deriveKey"]);
  const key=await crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt:new TextEncoder().encode("zynox-stock-v1"),info:new TextEncoder().encode("encryption")},material,{name:"AES-GCM",length:256},false,["decrypt"]);

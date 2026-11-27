@@ -4,7 +4,7 @@ import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
-import {deliver} from "./payment-webhook.js";
+import {deliver,decryptStock} from "./payment-webhook.js";
 import {getSession} from "./auth.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
 const fail=(error,status=400)=>json({error},status);
@@ -128,8 +128,10 @@ export async function commerce(request,env,storeChannels){
   const variantId=url.searchParams.get("variant_id")||"";
   const variant=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(variantId,store.id).first();
   if(!variant)return fail("Variação não encontrada.",404);
-  const rows=await env.DB.prepare("SELECT id,status,created_at FROM stock WHERE variant_id=? ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
-  return json({infinite:Boolean(variant.infinite_stock),items:rows.results});
+  const rows=await env.DB.prepare("SELECT id,status,created_at,key_encrypted FROM stock WHERE variant_id=? AND status IN ('available','reserved') ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
+  if(rows.results.some(r=>r.status==="available")&&!env.STOCK_ENCRYPTION_KEY)return fail("Criptografia do estoque indisponível.",503);
+  const items=await Promise.all(rows.results.map(async r=>{let value=null;if(r.status==="available")try{value=await decryptStock(r.key_encrypted,variantId,env.STOCK_ENCRYPTION_KEY);}catch{}return {id:r.id,status:r.status,created_at:r.created_at,value};}));
+  return json({infinite:Boolean(variant.infinite_stock),items});
  }
  if(path==="/api/commerce/stock/replace"&&request.method==="POST"){
   const variantId=String(body.variant_id||""),stockId=String(body.stock_id||""),value=String(body.key||"").trim();

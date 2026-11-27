@@ -937,17 +937,17 @@ function navigate(page) {
         const n=input("Nome da variação"),price=input("Preço em reais","number"),keys=node("textarea",undefined,"control-input"),infinite=input("","checkbox"),row=node("div",undefined,"control-item compact-variant");
         n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";keys.rows=2;infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
         const entry={id:v?.id,n,price,keys,infinite,row};variants.push(entry);
-        const variantNameField=field("Nome da variação",n);row.append(variantNameField,field("Preço",price),node("p","Estoque disponível: "+(v?.infinite_stock?"Infinito":v?.available||0)),field("Adicionar keys",keys),field("Estoque infinito",infinite));
+        const variantNameField=field("Nome da variação",n);row.append(variantNameField,field("Preço",price),node("p","Estoque: "+(v?.infinite_stock?"Infinito":(v?.on_hand??v?.available??0))),field("Adicionar keys",keys),field("Estoque infinito",infinite));
         if(v){
-          const stockTools=node("details",undefined,"stock-manager"),stockList=node("div");
-          const stockTitle=node("summary","Gerenciar keys cadastradas");stockTools.append(stockTitle,stockList);
+          const stockTools=node("section",undefined,"stock-manager stock-inline"),stockList=node("div");
+          stockTools.append(node("h4","Estoque cadastrado"),stockList);
           async function refreshKeys(){
             stockList.replaceChildren(node("p","Carregando estoque..."));
             const result=await api("/api/commerce/stock/list?store="+encodeURIComponent(id)+"&variant_id="+encodeURIComponent(v.id));
             stockList.replaceChildren(node("p","Keys cadastradas: "+result.items.length+(result.items.length===150?" (mostrando as 150 mais recentes)":"")));
             for(const item of result.items){
               const line=node("div",undefined,"stock-key-row");
-              line.append(node("span","Key "+item.id.slice(0,8)+" • "+(item.status==="available"?"Disponível":item.status==="reserved"?"Reservada":"Utilizada")));
+              const value=node("span",item.status==="reserved"?"Item reservado":item.value??"Item indisponível para leitura","stock-value");line.append(value);
               if(item.status==="available"){const editKey=button("Editar",async()=>{const editRow=node("div",undefined,"stock-key-editor"),newKey=input("Nova key para substituir a atual");newKey.maxLength=1000;newKey.type="password";newKey.autocomplete="off";editRow.append(newKey,button("Salvar nova key",async()=>{if(!newKey.value.trim())throw Error("Informe a nova key.");await api("/api/commerce/stock/replace",{store_id:id,variant_id:v.id,stock_id:item.id,key:newKey.value});newKey.value="";await refreshKeys();toast("Key atualizada.",true);}),button("Cancelar",()=>editRow.remove()));if(line.nextElementSibling?.classList.contains("stock-key-editor"))line.nextElementSibling.remove();line.after(editRow);newKey.focus();});line.append(editKey);}
               if(item.status==="available"&&!result.infinite)line.append(button("Remover",async()=>{
                 if(!await confirmInApp("Remover esta key do estoque? Essa ação não pode ser desfeita."))return;
@@ -957,7 +957,7 @@ function navigate(page) {
               stockList.append(line);
             }
           }
-          stockTools.addEventListener("toggle",()=>{if(stockTools.open)refreshKeys().catch(e=>toast(e.message));});
+          refreshKeys().catch(e=>stockList.replaceChildren(node("p",e.message)));
           row.append(stockTools);
         }
         if(v)row.append(button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{if(variants.some(x=>x.keys.value.trim()))throw Error("Salve as novas keys antes de alterar o modo.");await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});await load();const updated=data.products.find(x=>x.id===product.id);if(updated)await openEditor(updated);}));
