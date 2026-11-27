@@ -31,6 +31,9 @@ namespace_id = "1001"
 limit = 5
 period = 60
 
+[durable_objects.code_update_strategy]
+mode = "immediate"
+
 [[durable_objects.bindings]]
 name = "BOT_GATEWAY"
 class_name = "BotGateway"
