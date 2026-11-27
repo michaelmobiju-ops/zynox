@@ -108,11 +108,42 @@ export async function customBots(request,env){
  const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
  if(!store)return fail("Servidor não encontrado ou sem permissão.",404);
  const current=await env.DB.prepare("SELECT store_id,application_id,bot_user_id,bot_name,public_key,token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/presence"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const status=body.status,activity=String(body.activity||"").trim(),type=Number(body.type);
+  if(!["online","idle","dnd","invisible"].includes(status)||activity.length>100||![0,2,3,5].includes(type))return fail("Presença inválida.");
+  const gateway=await startGateway(env,storeId,"presence",{presence:{status,activities:activity?[{name:activity,type}]:[],afk:false,since:null}});
+  if(gateway.state==="unavailable")return fail("Gateway indisponível: "+gateway.reason,503);
+  return respond({gateway});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/commands"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const token=await customBotToken(env,current),path="/applications/"+current.application_id+"/guilds/"+store.guild_id+"/commands";
+  const commands=[{name:"ping",description:"Testar conexão"},{name:"zynox",description:"Conhecer a ZYNOX"},{name:"ajuda",description:"Comandos disponíveis"}];
+  const results=[];
+  for(const command of commands){const r=await discord(token,path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(command)});results.push({name:command.name,ok:r.ok,status:r.status});}
+  return respond({success:results.every(r=>r.ok),results});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/replace-token"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const token=String(body.token||"").trim();if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Token inválido.");
+  const [identity,app,member]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me"),discord(token,"/guilds/"+store.guild_id+"/members/"+current.bot_user_id)]);
+  if(!identity.ok||!app.ok||!member.ok||identity.data.id!==current.bot_user_id||app.data.id!==current.application_id)return fail("O token precisa pertencer ao mesmo bot e servidor.",403);
+  await env.DB.prepare("UPDATE custom_bots SET token_cipher=?,updated_at=CURRENT_TIMESTAMP WHERE store_id=? AND application_id=?").bind(await seal(env,token),storeId,current.application_id).run();
+  return respond({success:true,gateway:await startGateway(env,storeId,"restart")});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/disconnect"){
+  if(!current||body.confirm!==true)return fail("Confirme a desconexão.");
+  const gateway=await startGateway(env,storeId,"disable");
+  if(gateway.state==="unavailable")return fail("Não foi possível desligar o Gateway: "+gateway.reason,503);
+  await env.DB.prepare("DELETE FROM custom_bots WHERE store_id=? AND application_id=?").bind(storeId,current.application_id).run();
+  return respond({success:true});
+ }
  if(request.method==="POST"&&url.pathname==="/api/custom-bot/power"){
   if(!current)return fail("Bot não encontrado.",404);
   if(!["enable","disable","restart"].includes(body.action))return fail("Ação inválida.");
   const gateway=await startGateway(env,storeId,body.action);
-  if(gateway.state==="unavailable")return fail("Gateway indisponível.",503);
+  if(gateway.state==="unavailable")return fail("Gateway indisponível: "+gateway.reason,503);
   return respond({success:true,gateway});
  }
  if(request.method==="GET"&&url.pathname==="/api/custom-bot/details"){

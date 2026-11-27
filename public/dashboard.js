@@ -1401,6 +1401,15 @@ function navigate(page) {
       };
       powerActions.append(button("Ligar",()=>changePower("enable")),button("Reiniciar",()=>changePower("restart")),button("Desligar",()=>changePower("disable"),true));
       power.append(node("h3","Controle do bot"),powerStatus,powerActions);host.append(power);
+      if(result.gateway?.reason)power.append(node("p","Diagnóstico: "+result.gateway.reason));
+      const advanced=node("details",undefined,"bot-setting-card");advanced.append(node("summary","Presença, comandos e credenciais"));
+      const presence=select([["online","Online"],["idle","Ausente"],["dnd","Não perturbe"],["invisible","Invisível"]]);presence.value=result.gateway?.presence?.status||"online";
+      const activity=input("Atividade do bot");activity.maxLength=100;activity.value=result.gateway?.presence?.activities?.[0]?.name||"";
+      const activityType=select([["0","Jogando"],["2","Ouvindo"],["3","Assistindo"],["5","Competindo"]]);activityType.value=String(result.gateway?.presence?.activities?.[0]?.type??0);
+      advanced.append(field("Presença",presence),field("Tipo de atividade",activityType),field("Atividade",activity),button("Salvar presença",async()=>{await api("/api/custom-bot/presence",{store_id:id,status:presence.value,activity:activity.value,type:Number(activityType.value)});toast("Presença configurada.",true);}),node("p","Última conexão: "+(result.gateway?.lastReady?formatDate(result.gateway.lastReady):"Não registrada")),node("p","Último heartbeat: "+(result.gateway?.lastAck?formatDate(result.gateway.lastAck):"Não registrado")),button("Registrar comandos",async()=>{const r=await api("/api/custom-bot/commands",{store_id:id});toast(r.success?"Comandos registrados.":"Alguns comandos não foram registrados.",r.success);}));
+      const replacement=input("Novo token","password");replacement.autocomplete="off";
+      advanced.append(field("Substituir token do mesmo bot",replacement),button("Substituir token",async()=>{try{await api("/api/custom-bot/replace-token",{store_id:id,token:replacement.value});toast("Token substituído.",true);}finally{replacement.value="";}}),button("Desconectar bot",async()=>{if(!await confirmInApp("Desconectar o bot da ZYNOX? A loja e seus registros serão preservados."))return;await api("/api/custom-bot/disconnect",{store_id:id,confirm:true});navigate("bot");},true));host.append(advanced);
+
 
       const grid=node("div",undefined,"bot-settings-grid"),pickers={};
       for(const kind of ["avatar","banner"]){
