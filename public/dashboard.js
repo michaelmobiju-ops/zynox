@@ -1361,7 +1361,14 @@ function navigate(page) {
       await api("/api/custom-bot/connect",{store_id:storeSelect.value,token:token.value.trim()});
       token.value="";await refresh();toast("Token validado e protegido.",true);
     }),connection,profile);
-    main.append(box);
+    const direct=panel("Conectar um novo servidor","Use seu próprio bot, sem instalar o bot oficial da ZYNOX.");
+    const guildInput=input("ID do servidor Discord");
+    const directToken=input("Token do bot");directToken.type="password";directToken.autocomplete="off";
+    direct.append(node("p","Ative o modo desenvolvedor no Discord, copie o ID do servidor e instale seu bot nele antes de continuar."),field("ID do servidor",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
+      try{await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});toast("Servidor vinculado.",true);navigate("bot");}finally{directToken.value="";}
+    }));
+    if(!ZYNOX.user.discord_id)direct.append(button("Vincular minha conta Discord",()=>location.href="/auth/discord/link"));
+    main.append(direct,box);
     async function refresh(){
       profile.replaceChildren();
       if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}

@@ -386,7 +386,7 @@ export default {
       // List installed guilds only for users with verified management rights.
       if(path==="/api/server-controls"||path==="/api/server-controls/action"){
         const user=await getSession(request,env);
-        if(!user||!user.discord_id||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
+        if(!user||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
         if(path==="/api/server-controls"&&request.method==="GET"){
           let stores,controls_ready=true;
           try{
@@ -408,7 +408,7 @@ export default {
           }
           return json({stores,controls_ready,bot_mode:"http",presence_supported:false});
         }
-        if(path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+        if(!user.discord_id||path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
         let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
         const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||""),user.id).first();
         if(!store)return json({error:"Servidor não encontrado."},404);
