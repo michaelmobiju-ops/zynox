@@ -9,7 +9,7 @@ import {shield} from "./shield.js";
 import {ownerMetrics,monitor} from "./operations.js";
 import {publicApi} from "./public-api.js";
 import {storefront} from "./storefront.js";
-import {customBots} from "./custom-bots.js";
+import {customBots,botIdentityForStore} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
 import {cart} from "./cart.js";
 import {paymentWebhook} from "./payment-webhook.js";
@@ -110,8 +110,10 @@ async function storeChannels(request,env) {
         const store = stores.find(s=>s.id===id);
         if (!store) return json({error:"Loja não encontrada."},404);
         const guild = store.guild_id;
-        const call = p => fetch("https://discord.com/api/v10"+p,{headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(8000)});
-        const [gr,mr,br,cr] = await Promise.all([call("/guilds/"+guild),call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild+"/members/"+env.DISCORD_CLIENT_ID),call("/guilds/"+guild+"/channels")]);
+        const bot=await botIdentityForStore(env,store.id);
+        if(!bot.token||!bot.id)return json({error:"Nenhum bot disponível para esta loja."},503);
+        const call = p => fetch("https://discord.com/api/v10"+p,{headers:{Authorization:"Bot "+bot.token},signal:AbortSignal.timeout(8000)});
+        const [gr,mr,br,cr] = await Promise.all([call("/guilds/"+guild),call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild+"/members/"+bot.id),call("/guilds/"+guild+"/channels")]);
         if (![gr,mr,br,cr].every(r=>r.ok)) return json({error:"Servidor indisponível ou acesso removido."},403);
         const [g,m,b,channels] = await Promise.all([gr.json(),mr.json(),br.json(),cr.json()]);
         const base = member => g.roles.reduce((p,r)=>r.id===guild||member.roles.includes(r.id)?p|BigInt(r.permissions):p,0n);
@@ -131,7 +133,7 @@ async function storeChannels(request,env) {
           return p;
         }
         const required=19456n;
-        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,env.DISCORD_CLIENT_ID,c)&required)===required}))});
+        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,bot.id,c)&required)===required}))});
       
 }
 

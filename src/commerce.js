@@ -17,7 +17,7 @@ export async function commerce(request,env,storeChannels){
  const store=await env.DB.prepare("SELECT * FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||url.searchParams.get("store")||""),user.id).first();
  if(!store)return fail("Loja não encontrada.",404);
  const expansion=await expansionApi(path,request,env,store,body,user);if(expansion)return expansion;
- const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
+ const call=async(p,opts={})=>{const token=await botTokenForStore(env,store.id);if(!token)return new Response(null,{status:503});return fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});};
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
  if(path==="/api/commerce/ticket-panels"){
   if(request.method==="POST"){
@@ -62,11 +62,11 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/automations"&&request.method==="GET"){
   const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivering','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
-  return json({delivery:{configured:Boolean(env.DISCORD_BOT_TOKEN&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:false},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
+  return json({delivery:{configured:Boolean((await botTokenForStore(env,store.id))&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:true},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
  }
  if(path==="/api/commerce/integrations"&&request.method==="GET"){
   const gateways=await list("SELECT provider,status,is_primary FROM gateways WHERE store_id=?",store.id);
-  return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(env.DISCORD_BOT_TOKEN)},gateways,features:{wallet:false,ai:false,real_payments:false}});
+  return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(await botTokenForStore(env,store.id))},gateways,features:{wallet:false,ai:false,real_payments:false}});
  }
  if(path==="/api/commerce/stock/summary"&&request.method==="GET"){
  const rows=await list("SELECT p.id AS product_id,p.name AS product_name,v.id AS variant_id,v.name AS variant_name,v.infinite_stock,COUNT(CASE WHEN s.status='available' THEN 1 END) AS available,COUNT(CASE WHEN s.status='reserved' THEN 1 END) AS reserved,COUNT(CASE WHEN s.status='used' THEN 1 END) AS used FROM products p JOIN variants v ON v.product_id=p.id LEFT JOIN stock s ON s.variant_id=v.id WHERE p.store_id=? AND p.status!='archived' GROUP BY p.id,v.id ORDER BY p.name,v.name",store.id);

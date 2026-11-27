@@ -19,6 +19,13 @@ export async function botTokenForStore(env,storeId){
  if(record)return customBotToken(env,record);
  return env.DISCORD_BOT_TOKEN||null;
 }
+export async function botIdentityForStore(env,storeId){
+ let row;
+ try{row=await env.DB.prepare("SELECT token_cipher,bot_user_id FROM custom_bots WHERE store_id=?").bind(storeId).first();}
+ catch(error){if(!String(error).includes("no such table"))throw error;}
+ if(row)return {token:await customBotToken(env,row),id:row.bot_user_id};
+ return {token:env.DISCORD_BOT_TOKEN||null,id:env.DISCORD_CLIENT_ID||null};
+}
 async function discord(token,path,options={}){
  const response=await fetch("https://discord.com/api/v10"+path,{...options,headers:{Authorization:"Bot "+token,...options.headers},signal:AbortSignal.timeout(9000)});
  const data=await response.json().catch(()=>({}));
