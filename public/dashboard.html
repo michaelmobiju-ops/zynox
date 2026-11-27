@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="noindex">
   <title>ZYNOX | Dashboard</title>
   <link rel="stylesheet" href="/dashboard.css?v=brand-20261126-5">
-  <script src="/dashboard.js?v=neon-4" defer></script>
-<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=4"></head>
+  <script src="/dashboard.js?v=chart-close-v6" defer></script>
+<link rel="icon" href="/zynox-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/neon.css?v=chart-close-v6"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><script src="/pwa.js?v=1" defer></script></head>
 
 <body>
 
@@ -42,7 +42,8 @@
 
         <small>GERENCIAMENTO</small>
         <button data-page="servers" data-icon="◉">Servidores</button>
-        <button data-page="bot" data-icon="▣">Meu bot</button>
+        <button data-page="bot" data-icon="▣">Conectar bot</button>
+        <button data-page="bot-settings" data-icon="⚙">Configurar bot</button>
 
         <button data-icon="⬡" data-page="products">Produtos</button>
 
@@ -76,7 +77,7 @@
         </div>
 
         <button type="button" class="sidebar-account" data-page="account" aria-label="Abrir minha conta"><span id="sidebar-profile-avatar" class="account-avatar">◉</span><span><span id="sidebar-profile-name">Minha conta</span><small id="sidebar-profile-role">Assinante</small></span><span>›</span></button>
-        <button id="logout" class="logout">
+        <button type="button" id="operations-open">ZYNOX Monitor</button><button type="button" id="shield-open">ZYNOX Shield</button><button id="logout" class="logout">
           Sair da conta
         </button>
 
@@ -136,5 +137,5 @@
 
   </div>
 
-<script src="/neon-nav.js?v=3" defer></script></body>
+<script src="/neon-nav.js?v=3" defer></script><dialog id="shield-dialog" aria-labelledby="shield-title" class="operations-dialog shield-dialog"><h2 id="shield-title">ZYNOX Shield</h2><p id="shield-status" role="status" aria-live="polite"></p><div id="shield-sessions" style="max-height:40vh;overflow:auto"></div><button type="button" class="control-button shield-danger" id="shield-revoke">Encerrar outras sessões</button><form method="dialog"><button class="control-button">Fechar</button></form></dialog><script src="/shield-ui.js?v=3" defer></script><dialog id="operations-dialog" aria-labelledby="operations-title" class="operations-dialog"><h2 id="operations-title">ZYNOX Monitor</h2><p id="operations-status" role="status" aria-live="polite"></p><dl id="operations-metrics"></dl><button type="button" id="operations-refresh" class="control-button">Atualizar</button><form method="dialog"><button class="control-button">Fechar</button></form></dialog><script src="/operations-ui.js?v=1" defer></script></body>
 </html>

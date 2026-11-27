@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "ZYNOX",
+  "short_name": "ZYNOX",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#09090B",
+  "theme_color": "#101017",
+  "icons": [
+    {
+      "src": "/zynox-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

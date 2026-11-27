@@ -140,6 +140,7 @@ export async function discordCallback(request, env) {
     );
   }
 
+  await saveDiscordGuilds(env,user.id,token.access_token);
   const session = randomToken();
   const sessionHash = await hashToken(session);
 
@@ -197,7 +198,7 @@ export async function discordCallback(request, env) {
 export async function getSession(request, env) {
   const token = getCookie(request, "zynox_session");
 
-  if (!token) return null;
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
 
   const hash = await hashToken(token);
 
@@ -233,4 +234,14 @@ export async function logout(request, env) {
       "Cache-Control": "no-store"
     }
   });
+}
+
+// Cache only the authorized guild list, not OAuth tokens. Refresh via Discord authorization.
+export async function saveDiscordGuilds(env,userId,accessToken){
+ const response=await fetch(API+"/users/@me/guilds?limit=200",{headers:{Authorization:"Bearer "+accessToken}});
+ if(!response.ok)throw Error("Não foi possível consultar servidores do Discord.");
+ const guilds=await response.json();
+ if(!Array.isArray(guilds))throw Error("Resposta inválida do Discord.");
+ const allowed=guilds.filter(g=>g.owner||(BigInt(g.permissions||"0")&40n)!==0n).map(g=>({id:g.id,name:g.name}));
+ await env.DB.prepare("INSERT INTO discord_guild_cache(user_id,guilds_json,expires_at) VALUES(?,?,datetime('now','+24 hours')) ON CONFLICT(user_id) DO UPDATE SET guilds_json=excluded.guilds_json,expires_at=excluded.expires_at").bind(userId,JSON.stringify(allowed)).run();
 }

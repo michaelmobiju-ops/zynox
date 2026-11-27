@@ -7,7 +7,8 @@ const ZYNOX = {
 const pageNames = {
   home: "Início",
   dashboard: "Dashboard",
-  bot: "Meu bot",
+  bot: "Conectar bot",
+  "bot-settings": "Configurar bot",
   servers: "Servidores",
   products: "Produtos",
   sales: "Vendas",
@@ -114,7 +115,8 @@ async function api(path, body) {
     throw new Error("Sessão encerrada.");
   }
 
-  const data = await response.json();
+  let data;
+  try { data = await response.json(); } catch { throw new Error("Resposta inválida do servidor (HTTP "+response.status+"). Tente novamente."); }
 
   if (!response.ok) {
     throw new Error(
@@ -181,7 +183,7 @@ function select(options) {
   const choices=node("div",undefined,"zynox-select-menu");choices.hidden=true;
   const values=[];let selected="",disabled=false;
   const close=()=>{choices.hidden=true;root.setAttribute("aria-expanded","false");};
-  const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",()=>{if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
+  const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
   Object.defineProperty(root,"value",{get:()=>selected,set:v=>{selected=String(v);refresh();}});
   Object.defineProperty(root,"disabled",{get:()=>disabled,set:v=>{disabled=Boolean(v);display.disabled=disabled;close();}});
   Object.defineProperty(root,"options",{get:()=>values});
@@ -866,7 +868,7 @@ async function loadHomeDashboard() {
 
 function navigate(page) {
   if (!pageNames[page]) return;
-  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
+  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications","bot","bot-settings"].includes(page)) page="servers";
 
   if (page === "stock") page="products";
   if (page === "automations") page="integrations";
@@ -898,10 +900,10 @@ function navigate(page) {
   }
 
   if (page === "products") {
-    const box=panel("Produtos","Crie, edite e gerencie o estoque de cada produto em um só lugar.");
+    const box=panel("Produtos","Catálogo e estoque");box.classList.add("products-compact");
     const stores=select([["","Selecione a loja"]]),status=node("p","Carregando lojas..."),listing=node("div"),editor=node("div");
     let data={products:[],variants:[]},generation=0;
-    const add=button("+ Adicionar produto",()=>openEditor(null));add.disabled=true;
+    const add=button("+ Novo produto",()=>openEditor(null));add.disabled=true;
     const search=input("Buscar produtos","search");search.setAttribute("aria-label","Buscar produtos");
     const toolbar=node("div",undefined,"neon-product-toolbar");toolbar.append(search,add);
     listing.classList.add("neon-product-grid");
@@ -909,43 +911,43 @@ function navigate(page) {
     search.addEventListener("input",filter);
     box.append(toolbar,status,editor,listing);main.append(box);
     async function load(){
-      const id=stores.value,version=++generation;listing.replaceChildren();editor.replaceChildren();add.disabled=!id;
+      const id=stores.value,version=++generation;listing.replaceChildren();listing.hidden=false;editor.replaceChildren();add.disabled=!id;
       if(!id){status.textContent="Selecione a loja.";return;}
       status.textContent="Carregando produtos...";
       const d=await api("/api/commerce/products?store="+encodeURIComponent(id));if(version!==generation)return;
       data=d;status.textContent=d.products.length+" produto(s) cadastrado(s).";
       for(const p of d.products){
-        const card=node("div",undefined,"control-item");card.style.borderLeft="4px solid "+p.color;card.dataset.productName=String(p.name).toLocaleLowerCase("pt-BR");
+        const card=node("div",undefined,"control-item product-tile");card.style.borderLeft="3px solid "+p.color;card.dataset.productName=String(p.name).toLocaleLowerCase("pt-BR");
         if(p.image_url){const img=node("img");img.src=p.image_url;img.alt="Imagem do produto";img.loading="lazy";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-width:220px;max-height:120px;object-fit:contain;border-radius:8px;";card.append(img);}
-        card.append(node("h3",p.name),node("p",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status));
-        for(const v of d.variants.filter(v=>v.product_id===p.id)){const line=node("div",undefined,"neon-variant");line.append(node("strong",v.name+" — "+money(v.price_cents)));const qty=Number(v.available);const state=v.infinite_stock?"available":qty===0?"empty":qty<=3?"low":"available";line.append(node("span","Estoque: "+(v.infinite_stock?"Infinito":v.available),"neon-stock "+state));card.append(line);}
-        card.append(button("Editar produto",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Publicar no Discord",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});await load();}),button("Excluir produto",async()=>{if(!await confirmInApp("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));listing.append(card);
+        const heading=node("div",undefined,"product-tile-heading");heading.append(node("h3",p.name),node("span",p.status==="active"?"Publicado":p.status==="draft"?"Rascunho":p.status,"product-state "+(p.status==="active"?"live":"")));card.append(heading);
+        for(const v of d.variants.filter(v=>v.product_id===p.id)){const line=node("div",undefined,"neon-variant");line.append(node("strong",v.name+" — "+money(v.price_cents)));const qty=Number(v.on_hand??v.available);const state=v.infinite_stock?"available":qty===0?"empty":qty<=3?"low":"available";const stockLabel=node("span","Estoque: "+(v.infinite_stock&&qty>0?"Infinito":qty),"neon-stock "+state);stockLabel.dataset.stockId=v.id;line.append(stockLabel);card.append(line);}
+        const cardActions=node("div",undefined,"product-card-actions");cardActions.append(button("Editar",()=>openEditor(p)),button(p.message_id?"Atualizar anúncio":"Tentar publicação novamente",async()=>{await api("/api/commerce/publish",{store_id:id,product_id:p.id});toast(p.message_id?"Anúncio atualizado com sucesso!":"Produto publicado com sucesso no Discord!",true);await load();}),button("Excluir",async()=>{if(!await confirmInApp("Excluir este produto? O anúncio será removido do Discord e o histórico de vendas será preservado."))return;await api("/api/commerce/products/delete",{store_id:id,product_id:p.id});await load();},true));card.append(cardActions);listing.append(card);
       }filter();if(!d.products.length)listing.append(node("p","Nenhum produto cadastrado. Clique em Adicionar produto."));
     }
     async function openEditor(product){
       const id=stores.value;if(!id)return;
       editor.replaceChildren();const form=node("div",undefined,"control-item product-editor");
-      editor.append(form);form.append(node("h3",product?"Editar produto":"Adicionar produto"));
+      editor.append(form);const editorHeader=node("div",undefined,"product-editor-heading");editorHeader.append(node("h3",product?"Editar produto":"Novo produto"),button("Voltar",()=>{editor.replaceChildren();listing.hidden=false;}));form.append(editorHeader);listing.hidden=true;
       const name=input("Nome do produto"),description=node("textarea",undefined,"control-input"),image=input("https://..."),color=input("","color"),label=input("Comprar"),multiple=input("","checkbox"),channels=select([["","Selecione o canal"]]),rows=node("div"),preview=node("div",undefined,"control-item");
-      name.value=product?.name||"";description.value=product?.description||"";image.value=product?.image_url||"";color.value=product?.color||"#7135FF";label.value=product?.button_text||"Comprar";multiple.checked=Boolean(product?.has_variations);channels.disabled=true;
+      name.value=product?.name||"";description.value=product?.description||"";description.rows=3;image.value=product?.image_url||"";color.value=product?.color||"#7135FF";label.value=product?.button_text||"Comprar";multiple.checked=Boolean(product?.has_variations);channels.disabled=true;
       function renderPreview(){preview.replaceChildren(node("h3",name.value||"Nome do produto"),node("p",description.value||"Descrição"),node("p",label.value||"Comprar"));preview.style.borderLeft="4px solid "+color.value;if(/^https:\/\//i.test(image.value)){const img=node("img");img.src=image.value;img.alt="Prévia da imagem";img.referrerPolicy="no-referrer";img.style.cssText="width:100%;max-height:180px;object-fit:contain";preview.append(img);}}
       for(const e of [name,description,image,color,label])e.addEventListener("input",renderPreview);renderPreview();
       const variants=[];
       function addVariant(v){
         const n=input("Nome da variação"),price=input("Preço em reais","number"),keys=node("textarea",undefined,"control-input"),infinite=input("","checkbox"),row=node("div",undefined,"control-item compact-variant");
-        n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
+        n.value=v?.name|| (variants.length?"":"Padrão");price.min="0.01";price.step="0.01";price.value=v?(v.price_cents/100).toFixed(2):"";keys.placeholder="Uma key por linha";keys.rows=2;infinite.checked=Boolean(v?.infinite_stock);infinite.disabled=Boolean(v);keys.disabled=Boolean(v?.infinite_stock);
         const entry={id:v?.id,n,price,keys,infinite,row};variants.push(entry);
-        const variantNameField=field("Nome da variação",n);row.append(variantNameField,field("Preço",price),node("p","Estoque disponível: "+(v?.infinite_stock?"Infinito":v?.available||0)),field("Adicionar keys",keys),field("Estoque infinito",infinite));
+        const variantNameField=field("Nome da variação",n);row.append(variantNameField,field("Preço",price),node("p","Estoque: "+(v?.infinite_stock?"Infinito":(v?.on_hand??v?.available??0))),field("Adicionar keys",keys),field("Estoque infinito",infinite));
         if(v){
-          const stockTools=node("details",undefined,"stock-manager"),stockList=node("div");
-          const stockTitle=node("summary","Gerenciar keys cadastradas");stockTools.append(stockTitle,stockList);
+          const stockTools=node("section",undefined,"stock-manager stock-inline"),stockList=node("div");
+          stockTools.append(node("h4","Estoque cadastrado"),stockList);
           async function refreshKeys(){
             stockList.replaceChildren(node("p","Carregando estoque..."));
             const result=await api("/api/commerce/stock/list?store="+encodeURIComponent(id)+"&variant_id="+encodeURIComponent(v.id));
             stockList.replaceChildren(node("p","Keys cadastradas: "+result.items.length+(result.items.length===150?" (mostrando as 150 mais recentes)":"")));
             for(const item of result.items){
               const line=node("div",undefined,"stock-key-row");
-              line.append(node("span","Key "+item.id.slice(0,8)+" • "+(item.status==="available"?"Disponível":item.status==="reserved"?"Reservada":"Utilizada")));
+              const value=node("span",item.status==="reserved"?"Item reservado":item.value??"Item indisponível para leitura","stock-value");line.append(value);
               if(item.status==="available"){const editKey=button("Editar",async()=>{const editRow=node("div",undefined,"stock-key-editor"),newKey=input("Nova key para substituir a atual");newKey.maxLength=1000;newKey.type="password";newKey.autocomplete="off";editRow.append(newKey,button("Salvar nova key",async()=>{if(!newKey.value.trim())throw Error("Informe a nova key.");await api("/api/commerce/stock/replace",{store_id:id,variant_id:v.id,stock_id:item.id,key:newKey.value});newKey.value="";await refreshKeys();toast("Key atualizada.",true);}),button("Cancelar",()=>editRow.remove()));if(line.nextElementSibling?.classList.contains("stock-key-editor"))line.nextElementSibling.remove();line.after(editRow);newKey.focus();});line.append(editKey);}
               if(item.status==="available"&&!result.infinite)line.append(button("Remover",async()=>{
                 if(!await confirmInApp("Remover esta key do estoque? Essa ação não pode ser desfeita."))return;
@@ -955,10 +957,10 @@ function navigate(page) {
               stockList.append(line);
             }
           }
-          stockTools.addEventListener("toggle",()=>{if(stockTools.open)refreshKeys().catch(e=>toast(e.message));});
+          refreshKeys().catch(e=>stockList.replaceChildren(node("p",e.message)));
           row.append(stockTools);
         }
-        if(v)row.append(button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{if(variants.some(x=>x.keys.value.trim()))throw Error("Salve as novas keys antes de alterar o modo.");await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});await load();const updated=data.products.find(x=>x.id===product.id);if(updated)await openEditor(updated);}));
+        if(v)row.append(button(v.infinite_stock?"Desativar estoque infinito":"Ativar estoque infinito",async()=>{if(variants.some(x=>x.keys.value.trim()))throw Error("Salve as novas keys antes de alterar o modo.");const changed=await api("/api/commerce/stock/mode",{store_id:id,variant_id:v.id,infinite:!v.infinite_stock});toast(changed.announcement_updated?"Modo de estoque e anúncio atualizados.":"Modo de estoque salvo. Confira o anúncio.",true);await load();const updated=data.products.find(x=>x.id===product.id);if(updated)await openEditor(updated);}));
         else row.append(button("Remover variação",()=>{if(variants.length>1){variants.splice(variants.indexOf(entry),1);row.remove();}}));
         rows.append(row);
         entry.variantNameField=variantNameField;
@@ -968,16 +970,19 @@ function navigate(page) {
       const addRow=button("+ Adicionar variação",()=>{if(variants.length<25)addVariant(null);});addRow.hidden=!multiple.checked;
       function syncVariationFields(){addRow.hidden=!multiple.checked;for(const v of variants){v.variantNameField.hidden=!multiple.checked;if(v.removeButton&&v.removeButton.textContent==="Remover variação")v.removeButton.hidden=!multiple.checked;}}
       multiple.addEventListener("change",()=>{if(!multiple.checked&&variants.length>1){multiple.checked=true;alert("Remova as novas variações primeiro. As existentes são preservadas.");}syncVariationFields();});syncVariationFields();
-      const save=button("Salvar produto",async()=>{if(!channels.value)throw Error("Selecione o canal.");await api("/api/commerce/products",{store_id:id,product_id:product?.id,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({id:v.id,name:v.n.value,price_cents:Math.round(Number(v.price.value)*100),keys:v.keys.value,infinite:v.infinite.checked}))});await load();status.textContent="Produto e estoque salvos. Publique ou atualize o anúncio quando desejar.";});
-      const basic=node("div",undefined,"product-fields");basic.append(field("Nome",name),field("Canal de vendas",channels),field("Descrição",description));
-      const appearance=node("details",undefined,"product-section");appearance.append(node("summary","Aparência do anúncio"),field("Imagem (link HTTPS)",image),field("Cor da barra lateral",color),field("Texto do botão",label),preview);
+      const save=button("Salvar produto",async()=>{if(!channels.value)throw Error("Selecione o canal.");const saved=await api("/api/commerce/products",{store_id:id,product_id:product?.id,channel_id:channels.value,name:name.value,description:description.value,image_url:image.value,color:color.value,button_text:label.value,has_variations:multiple.checked,variants:variants.map(v=>({id:v.id,name:v.n.value,price_cents:Math.round(Number(v.price.value)*100),keys:v.keys.value,infinite:v.infinite.checked}))});if(product?.message_id){await load();toast("Produto salvo. Use Atualizar anúncio para publicar as alterações.",true);return;}try{await api("/api/commerce/publish",{store_id:id,product_id:saved.id});toast("Produto publicado com sucesso no Discord!",true);}catch(error){toast("Produto salvo, mas a publicação não foi confirmada: "+error.message);}
+      await load();});
+      const basic=node("div",undefined,"product-fields");basic.append(field("Nome do produto",name),field("Canal do anúncio",channels),field("Descrição",description));
+      const appearance=node("details",undefined,"product-section");appearance.append(node("summary","Personalizar anúncio (opcional)"),field("Imagem (link HTTPS)",image),field("Cor da barra lateral",color),field("Texto do botão",label),preview);
       const inventory=node("details",undefined,"product-section");inventory.open=true;inventory.append(node("summary","Preço e estoque"),field("Usar variações",multiple),rows,addRow);
-      const actions=node("div",undefined,"product-actions");actions.append(save,button("Cancelar",()=>editor.replaceChildren()));
+      const actions=node("div",undefined,"product-actions");actions.append(save,button("Cancelar",()=>{editor.replaceChildren();listing.hidden=false;}));
       form.append(basic,appearance,inventory,actions);
       form.scrollIntoView({behavior:"smooth",block:"start"});
       const result=await api("/api/store/channels?store="+encodeURIComponent(id));if(!editor.contains(form)||stores.value!==id)return;
       for(const c of result.channels){const o=new Option("#"+c.name+(c.available?"":" — sem permissão"),c.id);o.disabled=!c.available;channels.append(o);}channels.value=product?.channel_id||"";channels.disabled=Boolean(product?.message_id);
     }
+    const refreshInventory=()=>{if(!box.isConnected){clearInterval(inventoryTimer);return;}if(editor.childElementCount||document.hidden)return;api("/api/commerce/products?store="+encodeURIComponent(stores.value)).then(next=>{if(!box.isConnected||editor.childElementCount)return;for(const v of next.variants){const label=listing.querySelector("[data-stock-id="+JSON.stringify(v.id)+"]");if(label){const qty=Number(v.on_hand??v.available);label.textContent="Estoque: "+(v.infinite_stock&&qty>0?"Infinito":qty);label.className="neon-stock "+(qty===0?"empty":v.infinite_stock||qty>3?"available":"low");}}data=next;}).catch(()=>{});};
+    const inventoryTimer=setInterval(refreshInventory,10000);
     stores.addEventListener("change",()=>load().catch(e=>status.textContent=e.message));
     api("/api/store/channels").then(d=>{for(const s of d.stores.filter(s=>s.id===ZYNOX.store?.id))stores.append(new Option(s.name,s.id));if(ZYNOX.store){stores.value=ZYNOX.store.id;stores.disabled=true;}status.textContent=d.stores.length?"Selecione a loja.":"Vincule uma loja em Servidores.";if(ZYNOX.store)return load();}).catch(e=>status.textContent=e.message);
     return;
@@ -1166,7 +1171,20 @@ function navigate(page) {
       if(page==="sales"||page==="reports"){
         const m=d.stats;
         list.append(metrics([["Valor bruto confirmado",money(m.sales_cents)],["Pedidos",m.orders],["Pagos ou entregues",m.paid],["Pendentes",m.pending],["Entregues",m.delivered],["Clientes",m.customers]]));
-        if(page==="reports"){list.append(node("p","Ticket médio confirmado: "+money(m.paid?m.sales_cents/m.paid:0)),node("p","Indicadores acumulados. Incluem vendas de teste, quando existentes; não representam saldo bancário nem lucro líquido."));return;}
+        if(page==="reports"){
+ const period=select([["7","7 dias"],["30","30 dias"],["90","90 dias"]]),body=node("div");period.value="30";
+ list.append(node("p","Ticket médio acumulado: "+money(m.paid?m.sales_cents/m.paid:0)),field("Período dos relatórios",period),body);
+ let reportVersion=0;async function renderReport(){const version=++reportVersion;body.replaceChildren(node("p","Carregando relatório..."));const r=await api("/api/commerce/analytics?store="+encodeURIComponent(id)+"&days="+period.value);if(version!==reportVersion||!body.isConnected)return;body.replaceChildren();
+ const sum=r.daily.reduce((n,x)=>n+Number(x.cents),0);body.append(metrics([["Receita bruta no período",money(sum)],["Pedidos pagos",r.daily.reduce((n,x)=>n+Number(x.orders),0)]]));
+ body.append(node("h3","Faturamento diário (UTC)"));
+ const chart=node("div",undefined,"revenue-chart"),ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox","0 0 320 180");svg.setAttribute("role","img");svg.setAttribute("aria-label","Gráfico de faturamento diário");
+ const addSvg=(tag,attrs,content)=>{const el=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));if(content!==undefined)el.textContent=content;svg.append(el);return el;};
+ const values=r.daily,max=Math.max(1,...values.map(x=>Number(x.cents)||0)),step=276/Math.max(1,values.length);
+ for(let n=0;n<=4;n++){const y=12+n*32;addSvg("line",{x1:34,y1:y,x2:310,y2:y,stroke:"#55445f","stroke-opacity":0.5});addSvg("text",{x:30,y:y+3,"text-anchor":"end",fill:"#a1a1aa","font-size":8},money(max*(4-n)/4).replace("R$","").trim());}
+ values.forEach((x,j)=>{const height=128*Number(x.cents)/max;const bar=addSvg("rect",{x:34+j*step+step*0.12,y:140-Math.max(1,height),width:Math.max(1,step*0.76),height:Math.max(1,height),rx:Math.min(3,step/4),fill:height?"#a855f7":"#55445f"});const tip=document.createElementNS(ns,"title");tip.textContent=x.day+": "+money(x.cents);bar.append(tip);if(j===0||j===values.length-1||j===Math.floor(values.length/2))addSvg("text",{x:34+(j+0.5)*step,y:157,"text-anchor":j===0?"start":j===values.length-1?"end":"middle",fill:"#a1a1aa","font-size":9},x.day.slice(8)+"/"+x.day.slice(5,7));});
+ chart.append(svg);body.append(chart);if(!sum)body.append(node("p","Nenhuma venda confirmada no período. Faturamento: R$ 0,00."));
+ body.append(node("h3","Produtos mais vendidos"));for(const x of r.products)body.append(card(x.name,x.quantity+" unidades",money(x.cents)));body.append(node("h3","Ranking de compradores"));for(const x of r.buyers)body.append(card(x.username||x.discord_id,x.orders+" compras",money(x.cents)));body.append(node("h3","Estoque baixo"));for(const x of r.low)body.append(card(x.product+" • "+x.variant,x.quantity+" unidades disponíveis"));if(!r.low.length)body.append(node("p","Nenhum alerta de estoque finito."));body.append(node("p","Valores brutos confirmados; não representam lucro líquido ou saldo bancário."));
+ }period.addEventListener("change",()=>renderReport().catch(e=>toast(e.message)));await renderReport();return;}
         const filter=select([["","Todos os status"],["pending","Pendentes"],["paid","Pagos"],["delivered","Entregues"],["cancelled","Cancelados"],["expired","Expirados"]]),search=input("Buscar produto, cliente ou pedido"),results=node("div");
         const render=()=>{results.replaceChildren();const q=search.value.trim().toLowerCase();const items=d.orders.filter(o=>(!filter.value||o.status===filter.value)&&(!q||[o.id,o.username,o.product_name,o.variant_name].some(x=>String(x||"").toLowerCase().includes(q))));for(const o of items)results.append(card(o.product_name||"Pedido",o.variant_name||"Padrão","Cliente: "+(o.username||"—"),"Valor: "+money(o.total_cents),"Status: "+(labels[o.status]||o.status),"Data: "+formatDate(o.created_at),"ID: "+o.id));if(!items.length)results.append(node("p","Nenhum pedido encontrado."));};
         filter.addEventListener("change",render);search.addEventListener("input",render);
@@ -1185,15 +1203,15 @@ function navigate(page) {
           form.replaceChildren();
           if(!productSelect.value)return;
           const p=active.find(x=>x.id===productSelect.value);
-          const code=input("Ex.: PROMO10"),discount=input("Desconto %","number");discount.min="1";discount.max="100";
-          form.append(node("h3","Criar cupom para "+p.name),field("Código do cupom",code),field("Desconto (%)",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,product_id:p.id,code:code.value,discount:Number(discount.value)});await load();}));
+          const code=input("Ex.: PROMO10"),discount=input("Desconto %","number"),max=input("Sem limite","number"),days=input("Sem vencimento","number");discount.min="1";discount.max="100";
+          form.append(node("h3","Criar cupom para "+p.name),field("Código do cupom",code),field("Desconto (%)",discount),field("Limite de usos (opcional)",max),field("Validade em dias (opcional)",days),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,product_id:p.id,code:code.value,discount:Number(discount.value),max_uses:max.value?Number(max.value):null,days:days.value?Number(days.value):null});await load();}));
         };
         productSelect.addEventListener("change",showForm);
         chooser.append(field("Produto",productSelect));
         list.append(node("h3","Cupons cadastrados"));
         for(const c of d.coupons){
           const p=active.find(x=>x.id===c.product_id);
-          list.append(card(c.code,"Produto: "+(p?.name||"Cupom antigo sem produto definido"),"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses));
+          const tile=card(c.code,"Produto: "+(p?.name||"Cupom antigo sem produto definido"),"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses+" / "+(c.max_uses??"∞"),"Validade: "+(c.expires_at?formatDate(c.expires_at):"Sem vencimento"));tile.append(button(c.active?"Desativar":"Ativar",async()=>{await api("/api/commerce/coupons/toggle",{store_id:id,coupon_id:c.id,active:!c.active});await load();}));list.append(tile);
         }
         if(!d.coupons.length)list.append(node("p","Nenhum cupom cadastrado."));
         list.append(node("p","A aplicação do desconto no carrinho ainda não está habilitada."));
@@ -1287,10 +1305,10 @@ function navigate(page) {
     const head=node("div",undefined,"server-entry-head");
     head.append(node("span","✦ ZYNOX / GERENCIAMENTO","server-eyebrow"),node("h1","Seus servidores"),node("p","Selecione onde deseja gerenciar suas vendas, produtos e automações."));
     const actions=node("div",undefined,"server-entry-actions");
-    const invite=node("a","+ Adicionar bot ao Discord","control-button");
+    const invite=node("a","Usar bot oficial da ZYNOX","control-button");
     invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=85008&scope=bot%20applications.commands";
     invite.target="_blank";invite.rel="noopener noreferrer";
-    const refresh=button("Atualizar",()=>load());actions.append(invite,refresh);
+    const refresh=button("Atualizar",()=>load());actions.append(invite,button("Conectar meu próprio bot",()=>navigate("bot")),refresh);
     const notice=node("p",undefined,"server-entry-notice"),list=node("div",undefined,"server-grid");
     const foot=node("div",undefined,"server-entry-footer");
     foot.append(button("Minha conta",()=>navigate("account")));
@@ -1323,7 +1341,7 @@ function navigate(page) {
       }
       if(!data.stores.some(s=>!s.removed_at)){
         const empty=node("div",undefined,"server-empty");
-        empty.append(node("h2","Nenhum servidor conectado"),node("p","Adicione a ZYNOX ao seu Discord e vincule o servidor para começar."));
+        empty.append(node("h2","Nenhum servidor conectado"),node("p","Escolha o bot oficial da ZYNOX ou conecte seu próprio bot para começar."));
         list.append(empty);
       }
       try{
@@ -1341,56 +1359,110 @@ function navigate(page) {
     load();return;
   }
 
-  if (page === "bot") {
-    const box=panel("Meu bot","Conecte o bot que você criou no Discord Developer e personalize seu perfil.");
-    box.classList.add("zynox-bot-panel");
-    const hero=node("div",undefined,"zynox-bot-hero");
-    const symbol=node("img");symbol.src="/zynox-logo.svg";symbol.alt="ZYNOX";symbol.width=84;symbol.height=84;
-    hero.append(symbol,node("div","SEU BOT + ZYNOX","zynox-bot-name"),node("p","Seu bot, sua identidade. A ZYNOX fornece o painel de gerenciamento."));
-    box.append(hero);
-    const info=node("p","Crie sua aplicação em discord.com/developers/applications, adicione o bot ao servidor e conecte o token abaixo. Nunca compartilhe o token em mensagens ou prints.");
-    const guide=node("a","Abrir Discord Developer Portal","control-button");
-    guide.href="https://discord.com/developers/applications";guide.target="_blank";guide.rel="noopener noreferrer";
-    const storeSelect=select([["","Selecione o servidor"]]);
-    const token=input("Cole o token do seu bot");token.type="password";token.autocomplete="off";
-    const connection=node("p","Selecione um servidor para verificar a conexão.");
-    const profile=node("div");
-    box.append(info,guide,field("Servidor",storeSelect),field("Token do bot",token),button("Conectar meu bot",async()=>{
-      if(!storeSelect.value)throw Error("Selecione o servidor.");
-      if(!token.value.trim())throw Error("Informe o token do bot.");
-      await api("/api/custom-bot/connect",{store_id:storeSelect.value,token:token.value.trim()});
-      token.value="";await refresh();toast("Token validado e protegido.",true);
-    }),connection,profile);
-    main.append(box);
-    async function refresh(){
-      profile.replaceChildren();
-      if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}
-      const result=await api("/api/custom-bot/status?store="+encodeURIComponent(storeSelect.value));
-      connection.textContent=result.connected?"Bot conectado: "+result.bot.name+" · Aplicação "+result.bot.application_id:"Nenhum bot próprio conectado a este servidor.";
-      if(!result.connected)return;
-      const note=node("p","O token fica criptografado no servidor. Para receber interações do Discord, configure o endereço abaixo no Discord Developer. A integração completa de vendas com bots próprios ainda está em desenvolvimento.");
-      const endpoint=input("URL de interações");endpoint.value=result.bot.interactions_url;endpoint.readOnly=true;
-      profile.append(node("h3","Personalização do perfil"),note,field("Interactions Endpoint URL",endpoint),button("Copiar URL",()=>navigator.clipboard.writeText(endpoint.value)));
-      for(const kind of ["avatar","banner"]){
-        const picker=node("input");picker.type="file";picker.accept="image/png,image/jpeg,image/gif,image/webp";
-        profile.append(field(kind==="avatar"?"Foto de perfil (até 1 MB)":"Banner (até 1 MB)",picker),button(kind==="avatar"?"Atualizar foto do bot":"Atualizar banner do bot",async()=>{
-          const file=picker.files?.[0];if(!file)throw Error("Escolha uma imagem.");if(file.size>1024*1024)throw Error("A imagem deve ter no máximo 1 MB.");
-          const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error("Falha ao ler imagem."));reader.readAsDataURL(file);});
-          await api("/api/custom-bot/profile",{store_id:storeSelect.value,kind,image});toast("Imagem atualizada no Discord.",true);
-        }));
-      }
-      const bio=node("textarea");bio.placeholder="Descrição da aplicação no Discord";bio.maxLength=400;bio.rows=3;
-      profile.append(field("Biografia / descrição",bio),button("Salvar biografia",async()=>{await api("/api/custom-bot/profile",{store_id:storeSelect.value,kind:"bio",description:bio.value});toast("Descrição atualizada.",true);}));
-      const nickname=input("Apelido neste servidor");nickname.maxLength=32;
-      profile.append(field("Apelido do bot",nickname),button("Salvar apelido",async()=>{await api("/api/commerce/bot-nickname",{store_id:storeSelect.value,nickname:nickname.value});toast("Apelido atualizado.",true);}));
+  if (page === "bot" || page === "bot-settings") {
+    const configuring=page==="bot-settings";
+    const box=panel(configuring?"Configurar bot":"Meus bots",configuring?"Personalize o perfil do seu bot.":"Gerencie os bots conectados à ZYNOX.");
+    box.classList.add("bot-settings-compact");main.append(box);
+    const content=node("div",undefined,"bot-workspace");box.append(content);
+    const status=node("p","Carregando bots...","bot-inline-status");content.append(status);
+    const labels={online:"Online",connecting:"Conectando",offline:"Offline",unavailable:"Indisponível"};
+    const imageFile=async file=>{if(!file)return null;if(file.size>1024*1024)throw Error("Imagem de até 1 MB.");return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error("Falha ao ler imagem."));reader.readAsDataURL(file);});};
+    let generation=0;
+    function onboarding(){
+      content.replaceChildren();
+      const form=node("div",undefined,"bot-workspace");
+      const server=select([["","Carregando servidores..."]]),token=input("Token do bot","password");token.autocomplete="off";
+      const message=node("p","","bot-inline-status"),authorize=button("Autorizar servidores",()=>location.href="/auth/discord/link");authorize.hidden=true;
+      const guide=node("a","Criar bot no Discord Developer","bot-subtle-link");guide.href="https://discord.com/developers/applications";guide.target="_blank";guide.rel="noopener noreferrer";
+      let validated=null,invited=false;
+      const action=button("Validar token",async()=>{
+        if(!server.value||!token.value.trim())throw Error("Escolha o servidor e informe o token.");
+        if(!validated){validated=await api("/api/custom-bot/validate",{guild_id:server.value,token:token.value.trim()});action.textContent="Adicionar bot";message.textContent="Token validado: "+validated.name;return;}
+        if(!invited){window.open(validated.invite_url,"_blank","noopener,noreferrer");invited=true;action.textContent="Concluir conexão";message.textContent="Autorize o convite no Discord e volte para concluir.";return;}
+        const result=await api("/api/custom-bot/link",{guild_id:server.value,token:token.value.trim()});
+        if(result.needs_install){invited=false;action.textContent="Adicionar bot";message.textContent="Convite ainda não concluído.";return;}
+        token.value="";toast("Bot conectado.",true);ZYNOX.botSettingsId=result.store_id;navigate("bot-settings");
+      });
+      const reset=()=>{validated=null;invited=false;action.textContent="Validar token";message.textContent="";};
+      server.addEventListener("change",reset);token.addEventListener("input",reset);
+      form.append(button("← Meus bots",()=>navigate("bot")),field("Servidor Discord",server),authorize,field("Token do bot",token),guide,message,action);
+      content.append(form);
+      api("/api/discord/my-guilds").then(result=>{server.replaceChildren(new Option("Escolha o servidor",""),...result.servers.map(g=>new Option(g.name,g.id)));authorize.hidden=!result.needsAuthorization;if(result.needsAuthorization)message.textContent="Autorize a consulta aos servidores.";}).catch(e=>message.textContent=e.message);
     }
-    storeSelect.addEventListener("change",()=>refresh().catch(e=>connection.textContent=e.message));
-    api("/api/dashboard/summary?store=").then(data=>{
-      const stores=data.stores||[];
-      storeSelect.replaceChildren(...stores.map(st=>{const o=node("option",st.name);o.value=st.id;return o;}));
-      if(ZYNOX.store&&stores.some(st=>st.id===ZYNOX.store.id))storeSelect.value=ZYNOX.store.id;
-      if(stores.length)refresh().catch(e=>connection.textContent=e.message);
-    }).catch(e=>connection.textContent="Não foi possível carregar servidores: "+e.message);
+    async function loadSettings(id,host){
+      const version=++generation;host.replaceChildren(node("p","Consultando perfil no Discord..."));
+      if(!id)return;
+      const result=await api("/api/custom-bot/details?store="+encodeURIComponent(id));
+      if(version!==generation)return;
+      host.replaceChildren();
+      const preview=node("div",undefined,"bot-profile-preview");
+      const cover=node("div",undefined,"bot-profile-cover");
+      if(result.banner_url){const img=node("img");img.src=result.banner_url;img.alt="Banner atual";cover.append(img);}
+      const identity=node("div",undefined,"bot-profile-identity"),avatar=node("img");avatar.src=result.avatar_url||"/zynox-logo.svg";avatar.alt="Foto atual do bot";avatar.className="bot-profile-avatar";
+      const name=node("div",undefined,"bot-identity");name.append(node("strong",result.name),node("small",result.nickname===null?"Apelido não consultado":result.nickname||"Sem apelido no servidor"));
+      const state=result.gateway?.state||"unavailable";identity.append(avatar,name,node("span",labels[state]||"Não verificado","bot-presence "+state));preview.append(cover,identity);host.append(preview);
+      const power=node("section",undefined,"bot-setting-card bot-power-card");
+      const powerStatus=node("p",result.gateway?.enabled===false?"Inicialização automática desativada.":"Inicialização automática habilitada.");
+      const powerActions=node("div",undefined,"bot-power-actions");
+      const changePower=async action=>{
+        if(action==="disable"&&!await confirmInApp("Desligar a conexão Gateway deste bot?"))return;
+        for(const b of powerActions.querySelectorAll("button"))b.disabled=true;
+        try{
+          const response=await api("/api/custom-bot/power",{store_id:id,action});
+          result.gateway=response.gateway;
+          powerStatus.textContent=response.gateway.enabled===false?"Inicialização automática desativada.":"Inicialização automática habilitada.";
+          const badge=identity.querySelector(".bot-presence");const state=response.gateway.state;
+          badge.textContent=labels[state]||"Não verificado";badge.className="bot-presence "+state;
+          toast(action==="disable"?"Gateway desligado.":"Solicitação de conexão enviada.",true);
+        }finally{for(const b of powerActions.querySelectorAll("button"))b.disabled=false;}
+      };
+      powerActions.append(button("Ligar",()=>changePower("enable")),button("Reiniciar",()=>changePower("restart")),button("Desligar",()=>changePower("disable"),true));
+      power.append(node("h3","Controle do bot"),powerStatus,powerActions);host.append(power);
+      if(result.gateway?.reason)power.append(node("p","Diagnóstico: "+result.gateway.reason));
+      const advanced=node("details",undefined,"bot-setting-card");advanced.append(node("summary","Presença, comandos e credenciais"));
+      const presence=select([["online","Online"],["idle","Ausente"],["dnd","Não perturbe"],["invisible","Invisível"]]);presence.value=result.gateway?.presence?.status||"online";
+      const activity=input("Atividade do bot");activity.maxLength=100;activity.value=result.gateway?.presence?.activities?.[0]?.name||"";
+      const activityType=select([["0","Jogando"],["2","Ouvindo"],["3","Assistindo"],["5","Competindo"]]);activityType.value=String(result.gateway?.presence?.activities?.[0]?.type??0);
+      advanced.append(field("Presença",presence),field("Tipo de atividade",activityType),field("Atividade",activity),button("Salvar presença",async()=>{await api("/api/custom-bot/presence",{store_id:id,status:presence.value,activity:activity.value,type:Number(activityType.value)});toast("Presença configurada.",true);}),node("p","Última conexão: "+(result.gateway?.lastReady?formatDate(result.gateway.lastReady):"Não registrada")),node("p","Último heartbeat: "+(result.gateway?.lastAck?formatDate(result.gateway.lastAck):"Não registrado")),button("Registrar comandos",async()=>{const r=await api("/api/custom-bot/commands",{store_id:id});toast(r.success?"Comandos registrados.":"Alguns comandos não foram registrados.",r.success);}));
+      const replacement=input("Novo token","password");replacement.autocomplete="off";
+      advanced.append(field("Substituir token do mesmo bot",replacement),button("Substituir token",async()=>{try{await api("/api/custom-bot/replace-token",{store_id:id,token:replacement.value});toast("Token substituído.",true);}finally{replacement.value="";}}),button("Desconectar bot",async()=>{if(!await confirmInApp("Desconectar o bot da ZYNOX? A loja e seus registros serão preservados."))return;await api("/api/custom-bot/disconnect",{store_id:id,confirm:true});navigate("bot");},true));host.append(advanced);
+
+
+      const grid=node("div",undefined,"bot-settings-grid"),pickers={};
+      for(const kind of ["avatar","banner"]){
+        const card=node("section",undefined,"bot-setting-card"),picker=node("input");picker.type="file";picker.accept="image/png,image/jpeg,image/gif,image/webp";picker.setAttribute("aria-label",kind==="avatar"?"Nova foto":"Novo banner");pickers[kind]=picker;
+        card.append(node("h3",kind==="avatar"?"Foto de perfil":"Banner"),node("p","Até 1 MB"),picker);grid.append(card);
+      }
+      const bio=node("textarea");bio.value=result.bio??"";bio.maxLength=400;bio.rows=3;
+      const nick=input("Apelido neste servidor");nick.value=result.nickname??"";nick.maxLength=32;
+      const bioCard=node("section",undefined,"bot-setting-card"),nickCard=node("section",undefined,"bot-setting-card");
+      bioCard.append(field("Biografia",bio));nickCard.append(field("Apelido",nick));grid.append(bioCard,nickCard);host.append(grid);
+      const feedback=node("p",result.unavailable?.length?"Consulta parcial: "+result.unavailable.join("; ")+". Os campos não consultados podem ser preenchidos manualmente.":"","bot-inline-status");feedback.setAttribute("role","status");
+      const save=button("Salvar",async()=>{
+        const changes={};if(bio.value!==(result.bio??""))changes.bio=bio.value;if(nick.value!==(result.nickname??""))changes.nickname=nick.value;
+        for(const kind of ["avatar","banner"]){const file=pickers[kind].files?.[0];if(file)changes[kind]=await imageFile(file);}
+        if(!Object.keys(changes).length){feedback.textContent="Nenhuma alteração.";return;}
+        const response=await api("/api/custom-bot/save",{store_id:id,changes});
+        if(!response.success){const failed=Object.entries(response.results).filter(([,r])=>!r.ok).map(([k,r])=>({avatar:"Foto",banner:"Banner",bio:"Biografia",nickname:"Apelido"}[k]+" (HTTP "+r.status+")"));feedback.textContent="Falha em: "+failed.join(", ")+". As demais alterações podem ter sido salvas.";for(const [k,r] of Object.entries(response.results)){if(!r.ok)continue;if(k==="bio")result.bio=changes.bio;if(k==="nickname")result.nickname=changes.nickname;if(pickers[k])pickers[k].value="";}return;}
+        toast("Alterações salvas.",true);if(version===generation)await loadSettings(id,host);
+      });
+      save.classList.add("bot-save-all");host.append(feedback,save);
+    }
+    api("/api/custom-bot/list").then(({bots})=>{
+      content.replaceChildren();
+      if(!configuring){
+        const list=node("div",undefined,"bot-list");
+        for(const bot of bots){const card=node("article",undefined,"bot-list-item"),identity=node("div",undefined,"bot-identity");identity.append(node("strong",bot.name),node("small",bot.store_name));card.append(identity,button("Configurar",()=>{ZYNOX.botSettingsId=bot.store_id;navigate("bot-settings");}));list.append(card);}
+        if(!bots.length)list.append(node("p","Nenhum bot conectado."));
+        content.append(list,button("+ Conectar outro bot",onboarding));return;
+      }
+      if(!bots.length){content.append(node("p","Nenhum bot conectado. Use a aba Conectar bot."));return;}
+      const selector=select(bots.map(b=>[b.store_id,b.name+" · "+b.store_name])),host=node("div",undefined,"bot-workspace");
+      if(bots.some(b=>b.store_id===ZYNOX.botSettingsId))selector.value=ZYNOX.botSettingsId;
+      else if(bots.some(b=>b.store_id===ZYNOX.store?.id))selector.value=ZYNOX.store.id;
+      const load=()=>{ZYNOX.botSettingsId=selector.value;loadSettings(selector.value,host).catch(e=>host.replaceChildren(node("p",e.message)));};
+      selector.addEventListener("change",load);content.append(field("Bot conectado",selector),host);load();
+    }).catch(e=>status.textContent=e.message);
     return;
   }
 

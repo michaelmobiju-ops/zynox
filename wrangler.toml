@@ -1,6 +1,7 @@
 name = "zynox"
 main = "src/index.js"
 compatibility_date = "2026-11-25"
+compatibility_flags = ["enable_ctx_exports"]
 workers_dev = true
 
 [assets]
@@ -29,3 +30,36 @@ namespace_id = "1001"
 [ratelimits.simple]
 limit = 5
 period = 60
+
+[durable_objects.code_update_strategy]
+mode = "immediate"
+
+[[durable_objects.bindings]]
+name = "BOT_GATEWAY"
+class_name = "BotGateway"
+
+[[migrations]]
+tag = "gateway-v1"
+new_sqlite_classes = ["BotGateway"]
+
+[previews.vars]
+APP_NAME = "ZYNOX Preview"
+APP_ENV = "preview"
+DISCORD_CLIENT_ID = "1575192990132076637"
+DISCORD_REDIRECT_URI = "https://expansion-phase-20-22-zynox.michael-mobiju.workers.dev/auth/discord/callback"
+
+[[previews.d1_databases]]
+binding = "DB"
+database_name = "zynox-preview"
+database_id = "c560342c-00bd-4bf0-b970-1adfd78598f9"
+
+[[previews.ratelimits]]
+name = "LOGIN_RATE_LIMITER"
+namespace_id = "1002"
+[previews.ratelimits.simple]
+limit = 5
+period = 60
+
+[[previews.durable_objects.bindings]]
+name = "BOT_GATEWAY"
+class_name = "BotGateway"

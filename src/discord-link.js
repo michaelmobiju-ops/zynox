@@ -1,4 +1,4 @@
-import { getSession } from "./auth.js";
+import { getSession, saveDiscordGuilds } from "./auth.js";
 
 const API = "https://discord.com/api/v10";
 
@@ -48,7 +48,7 @@ export async function handleDiscordLink(request, env) {
     });
   }
 
-  if (!user || !["owner", "admin"].includes(user.role)) {
+  if (!user || !["owner", "admin","subscriber"].includes(user.role)) {
     return new Response("Acesso restrito.", {
       status: 403
     });
@@ -69,7 +69,7 @@ export async function handleDiscordLink(request, env) {
       client_id: env.DISCORD_CLIENT_ID,
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: "identify",
+      scope: "identify guilds",
       state
     });
 
@@ -166,7 +166,7 @@ export async function handleDiscordLink(request, env) {
     UPDATE users
     SET discord_id = ?
     WHERE id = ?
-      AND role IN ('owner', 'admin')
+      AND role IN ('owner', 'admin','subscriber')
       AND status = 'active'
       AND (discord_id IS NULL OR discord_id = ?)
       AND NOT EXISTS (
@@ -189,6 +189,7 @@ export async function handleDiscordLink(request, env) {
     );
   }
 
+  await saveDiscordGuilds(env,user.id,token.access_token);
   return new Response(null, {
     status: 302,
     headers: {

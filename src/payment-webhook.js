@@ -1,8 +1,10 @@
+import {checkoutBrand,receipt} from "./checkout-brand.js";
+import {refreshAnnouncement} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {announceSale} from "./sale-notifications.js";
 const hex=s=>Uint8Array.from(String(s).match(/../g)||[],x=>parseInt(x,16));
 const json=(data,status=200)=>Response.json(data,{status});
-async function decryptStock(value,variantId,secret){
+export async function decryptStock(value,variantId,secret){
  const [ivHex,cipherHex]=String(value).split(":");
  const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),"HKDF",false,["deriveKey"]);
  const key=await crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt:new TextEncoder().encode("zynox-stock-v1"),info:new TextEncoder().encode("encryption")},material,{name:"AES-GCM",length:256},false,["decrypt"]);
@@ -15,7 +17,7 @@ export async function deliver(env,orderId){
  if(order.status!=="paid"||!env.STOCK_ENCRYPTION_KEY)return "pending";
  const botToken=await botTokenForStore(env,order.store_id);
  if(!botToken)return "pending";
- const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND s.status=? LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock?"available":"reserved").first();
+ const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND ((?=1 AND s.status='available') OR (?=0 AND s.status IN ('reserved','sold'))) LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock,order.infinite_stock).first();
  if(!item)return "pending";
  const value=await decryptStock(item.key_encrypted,order.variant_id,env.STOCK_ENCRYPTION_KEY);
  const nonce=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(orderId))),b=>b.toString(16).padStart(2,"0")).join("").slice(0,25);
@@ -23,16 +25,18 @@ export async function deliver(env,orderId){
  if(!lock.meta.changes)return "pending";
  const release=()=>env.DB.prepare("UPDATE orders SET status='paid' WHERE id=? AND status='delivering'").bind(orderId).run();
  const headers={Authorization:"Bot "+botToken,"Content-Type":"application/json"};
+ const brand=await checkoutBrand(env,order.store_id);
  try{
   const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers,body:JSON.stringify({recipient_id:order.discord_id}),signal:AbortSignal.timeout(8000)});
   if(!dm.ok){await release();return "pending";}
   const channel=await dm.json();
-  const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers,body:JSON.stringify({content:"Pagamento confirmado!\nProduto: "+order.product_name+" — "+order.variant_name+"\nSua key: "+value,nonce,enforce_nonce:true,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
+  const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers,body:JSON.stringify({content:"Sua key:\n"+value,embeds:[receipt(order,brand)],nonce,enforce_nonce:true,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
   if(!sent.ok){if(sent.status<500)await release();return "pending";}
   const batch=[];
   if(!order.infinite_stock)batch.push(env.DB.prepare("UPDATE stock SET status='sold',reserved_until=NULL WHERE id=? AND status='reserved'").bind(item.id));
   batch.push(env.DB.prepare("UPDATE orders SET delivered_at=datetime('now'),status='delivered' WHERE id=? AND status='delivering'").bind(orderId));
   await env.DB.batch(batch);
+  try{await refreshAnnouncement(env,orderId);}catch{}
   return "delivered";
  }catch{
   // Unknown send outcome: leave the order locked for reconciliation.
@@ -78,6 +82,7 @@ export async function paymentWebhook(request,env){
   env.DB.prepare("UPDATE payments SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.id),
   env.DB.prepare("UPDATE orders SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.order_id)
  ]);
+ try{await refreshAnnouncement(env,row.order_id);}catch{}
  try{await announceSale(env,row.order_id);}catch{}
  await deliver(env,row.order_id);
  return json({received:true});

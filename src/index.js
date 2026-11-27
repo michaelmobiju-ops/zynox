@@ -1,5 +1,15 @@
+import {DurableObject} from "cloudflare:workers";
+import {BotGateway as GatewayController} from "./bot-gateway.js";
+export class BotGateway extends DurableObject {
+  constructor(ctx,env){super(ctx,env);this.controller=new GatewayController(ctx,env);}
+  fetch(request){return this.controller.fetch(request);}
+  alarm(){return this.controller.alarm();}
+}
+import {shield} from "./shield.js";
+import {ownerMetrics,monitor} from "./operations.js";
+import {publicApi} from "./public-api.js";
 import {storefront} from "./storefront.js";
-import {customBots} from "./custom-bots.js";
+import {customBots,botIdentityForStore} from "./custom-bots.js";
 import {ticketInteraction} from "./ticket-panels.js";
 import {cart} from "./cart.js";
 import {paymentWebhook} from "./payment-webhook.js";
@@ -100,8 +110,10 @@ async function storeChannels(request,env) {
         const store = stores.find(s=>s.id===id);
         if (!store) return json({error:"Loja não encontrada."},404);
         const guild = store.guild_id;
-        const call = p => fetch("https://discord.com/api/v10"+p,{headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN},signal:AbortSignal.timeout(8000)});
-        const [gr,mr,br,cr] = await Promise.all([call("/guilds/"+guild),call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild+"/members/"+env.DISCORD_CLIENT_ID),call("/guilds/"+guild+"/channels")]);
+        const bot=await botIdentityForStore(env,store.id);
+        if(!bot.token||!bot.id)return json({error:"Nenhum bot disponível para esta loja."},503);
+        const call = p => fetch("https://discord.com/api/v10"+p,{headers:{Authorization:"Bot "+bot.token},signal:AbortSignal.timeout(8000)});
+        const [gr,mr,br,cr] = await Promise.all([call("/guilds/"+guild),call("/guilds/"+guild+"/members/"+user.discord_id),call("/guilds/"+guild+"/members/"+bot.id),call("/guilds/"+guild+"/channels")]);
         if (![gr,mr,br,cr].every(r=>r.ok)) return json({error:"Servidor indisponível ou acesso removido."},403);
         const [g,m,b,channels] = await Promise.all([gr.json(),mr.json(),br.json(),cr.json()]);
         const base = member => g.roles.reduce((p,r)=>r.id===guild||member.roles.includes(r.id)?p|BigInt(r.permissions):p,0n);
@@ -121,7 +133,7 @@ async function storeChannels(request,env) {
           return p;
         }
         const required=19456n;
-        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,env.DISCORD_CLIENT_ID,c)&required)===required}))});
+        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&!String(c.topic||"").startsWith("ZYNOX_CART:")&&!String(c.name||"").startsWith("carrinho-")&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,bot.id,c)&required)===required}))});
       
 }
 
@@ -132,6 +144,11 @@ export default {
 
     try {
 
+      if (path === "/api/checkout-version") return json({version:"checkout-v7"});
+      if (path === "/api/monitor/health") return monitor(request,env);
+      if (path === "/api/owner/metrics") return ownerMetrics(request,env);
+      if (path.startsWith("/api/shield/")) return shield(request,env);
+      if (path.startsWith("/api/v1/")) return publicApi(request,env);
       if (path.startsWith("/api/storefront/")) return storefront(request,env);
       if (/^\/loja\/[a-f0-9-]{36}\/?$/i.test(path)) return servePage(request,env,"/storefront.html");
 
@@ -172,7 +189,10 @@ export default {
           const paused=await env.DB.prepare("SELECT c.enabled FROM server_controls c JOIN stores s ON s.id=c.store_id WHERE s.guild_id=?").bind(interaction.guild_id).first();
           if(paused&&paused.enabled===0)return json({type:4,data:{content:"ZYNOX está pausado neste servidor.",flags:64}});
         }
-        if (interaction.type === 3) { const ticket=await ticketInteraction(interaction,env,ctx);if(ticket)return json(ticket);const result = await cart(interaction,env); if(result) return json(result); }
+        if ([3,5].includes(interaction.type)) { const ticket=interaction.type===3?await ticketInteraction(interaction,env,ctx):null;if(ticket)return json(ticket);if(/^(buy:|pick:|choose:|checkout:|close:|copy-pix:|confirm-sale:|confirm-pix:)/.test(interaction.data?.custom_id||"")){
+          ctx.waitUntil((async()=>{let result;try{result=await cart(interaction,env,ctx);}catch{}try{await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(interaction.application_id)+"/"+encodeURIComponent(interaction.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:result?.data?.content||"Não foi possível abrir o carrinho.",components:result?.data?.components||[],allowed_mentions:{parse:[]}})});}catch{}})());
+          return json({type:5,data:{flags:64}});
+         } }
         const replies = {
           ping: "🏓 Pong! ZYNOX está respondendo.",
           zynox: "ZYNOX — plataforma de automação de vendas para Discord.",
@@ -379,7 +399,7 @@ export default {
       // List installed guilds only for users with verified management rights.
       if(path==="/api/server-controls"||path==="/api/server-controls/action"){
         const user=await getSession(request,env);
-        if(!user||!user.discord_id||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
+        if(!user||(!isAdmin(user)&&!await getSubscription(env,user.id)))return json({error:"Acesso restrito."},403);
         if(path==="/api/server-controls"&&request.method==="GET"){
           let stores,controls_ready=true;
           try{
@@ -401,7 +421,7 @@ export default {
           }
           return json({stores,controls_ready,bot_mode:"http",presence_supported:false});
         }
-        if(path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
+        if(!user.discord_id||path!=="/api/server-controls/action"||request.method!=="POST"||request.headers.get("Origin")!==url.origin)return json({error:"Acesso negado."},403);
         let body;try{body=await request.json();}catch{return json({error:"Dados inválidos."},400);}
         const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||""),user.id).first();
         if(!store)return json({error:"Servidor não encontrado."},404);
@@ -424,6 +444,14 @@ export default {
         return json({success:true,enabled:Boolean(enabled)});
       }
 
+      if(path==="/api/discord/my-guilds"){
+        if(request.method!=="GET")return json({error:"Método não permitido."},405);
+        const user=await getSession(request,env);
+        if(!user)return json({error:"Autenticação necessária."},401);
+        if(!isAdmin(user)&&!await getSubscription(env,user.id))return json({error:"Assinatura necessária."},403);
+        const row=await env.DB.prepare("SELECT guilds_json FROM discord_guild_cache WHERE user_id=? AND datetime(expires_at)>datetime('now')").bind(user.id).first();
+        return json({servers:row?JSON.parse(row.guilds_json):[],needsAuthorization:!row});
+      }
       if (path === "/api/discord/servers") {
         if (request.method !== "GET") return json({error:"Método não permitido."},405);
         const user = await getSession(request,env);
@@ -528,9 +556,9 @@ export default {
         await env.SALE_IMAGES.put(key,bytes,{httpMetadata:{contentType:type},customMetadata:{storeId}});
         return json({url:url.origin+"/media/sales/"+key});
       }
-      if (path.startsWith("/api/custom-bot/")) return customBots(request,env);
+      if (path.startsWith("/api/custom-bot/")) return customBots(request,env,ctx);
       if (path === "/api/store/channels") return storeChannels(request,env);
-      if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
+      if (path.startsWith("/api/commerce/")) return await commerce(request,env,storeChannels);
 
       if (path === "/api/notifications" || path === "/api/notifications/read") {
         const user = await getSession(request, env);

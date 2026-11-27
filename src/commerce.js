@@ -1,7 +1,11 @@
+import {confirmManual,releaseLegacyManual} from "./manual-stock.js";
+import {inventorySQL,announcement,refreshAnnouncement,refreshProduct} from "./product-announcement.js";
+import {botTokenForStore} from "./custom-bots.js";
+import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
 import {picpayToken} from "./picpay.js";
-import {deliver} from "./payment-webhook.js";
+import {deliver,decryptStock} from "./payment-webhook.js";
 import {getSession} from "./auth.js";
 const json=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
 const fail=(error,status=400)=>json({error},status);
@@ -14,7 +18,8 @@ export async function commerce(request,env,storeChannels){
  let body={};if(request.method==="POST"){try{body=await request.json()}catch{return fail("Dados inválidos.");}}
  const store=await env.DB.prepare("SELECT * FROM stores WHERE id=? AND owner_id=?").bind(String(body.store_id||url.searchParams.get("store")||""),user.id).first();
  if(!store)return fail("Loja não encontrada.",404);
- const call=(p,opts={})=>fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});
+ const expansion=await expansionApi(path,request,env,store,body,user);if(expansion)return expansion;
+ const call=async(p,opts={})=>{const token=await botTokenForStore(env,store.id);if(!token)return new Response(null,{status:503});return fetch("https://discord.com/api/v10"+p,{...opts,headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},signal:AbortSignal.timeout(8000)});};
  const list=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results;
  if(path==="/api/commerce/ticket-panels"){
   if(request.method==="POST"){
@@ -27,9 +32,10 @@ export async function commerce(request,env,storeChannels){
  if(path==="/api/commerce/bot-nickname"&&request.method==="POST"){
   const nickname=String(body.nickname||"").trim();
   if(!nickname||nickname.length>32)return fail("Informe um apelido de até 32 caracteres.");
-  if(!env.DISCORD_BOT_TOKEN)return fail("Bot Discord não configurado.",503);
-  const response=await fetch("https://discord.com/api/v10/guilds/"+encodeURIComponent(store.guild_id)+"/members/@me",{method:"PATCH",headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({nick:nickname}),signal:AbortSignal.timeout(8000)});
-  if(!response.ok)return fail("Não foi possível mudar o apelido. Confira as permissões do bot.",502);
+  const token=await botTokenForStore(env,store.id);
+  if(!token)return fail("Nenhum bot conectado a esta loja.",503);
+  const response=await fetch("https://discord.com/api/v10/guilds/"+encodeURIComponent(store.guild_id)+"/members/@me",{method:"PATCH",headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},body:JSON.stringify({nick:nickname}),signal:AbortSignal.timeout(8000)});
+  if(!response.ok)return fail("Não foi possível mudar o apelido. Confira se o bot está no servidor e possui permissão para alterar o próprio apelido (HTTP "+response.status+").",502);
   return json({success:true,nickname});
  }
  if(path==="/api/commerce/settings"&&request.method==="GET")return json({store:{id:store.id,name:store.name,guild_id:store.guild_id}});
@@ -58,13 +64,17 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/automations"&&request.method==="GET"){
   const rows=await list("SELECT o.id,o.status,o.paid_at,o.delivered_at,p.name AS product_name FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? AND o.status IN ('paid','delivering','delivered') ORDER BY o.paid_at DESC LIMIT 50",store.id);
-  return json({delivery:{configured:Boolean(env.DISCORD_BOT_TOKEN&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:false},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
+  return json({delivery:{configured:Boolean((await botTokenForStore(env,store.id))&&env.STOCK_ENCRYPTION_KEY),automatic:true,infinite_supported:true},payments:{sandbox_enabled:env.ENABLE_SANDBOX_PAYMENTS==="true"},rows});
  }
  if(path==="/api/commerce/integrations"&&request.method==="GET"){
   const gateways=await list("SELECT provider,status,is_primary FROM gateways WHERE store_id=?",store.id);
-  return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(env.DISCORD_BOT_TOKEN)},gateways,features:{wallet:false,ai:false,real_payments:false}});
+  return json({discord:{linked:true,guild_id:store.guild_id,bot_configured:Boolean(await botTokenForStore(env,store.id))},gateways,features:{wallet:false,ai:false,real_payments:false}});
  }
- if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
+ if(path==="/api/commerce/stock/summary"&&request.method==="GET"){
+ const rows=await list("SELECT p.id AS product_id,p.name AS product_name,v.id AS variant_id,v.name AS variant_name,v.infinite_stock,COUNT(CASE WHEN s.status='available' THEN 1 END) AS available,COUNT(CASE WHEN s.status='reserved' THEN 1 END) AS reserved,COUNT(CASE WHEN s.status='used' THEN 1 END) AS used FROM products p JOIN variants v ON v.product_id=p.id LEFT JOIN stock s ON s.variant_id=v.id WHERE p.store_id=? AND p.status!='archived' GROUP BY p.id,v.id ORDER BY p.name,v.name",store.id);
+ return json({variants:rows.map(row=>({...row,low_stock:!row.infinite_stock&&row.available<=5,out_of_stock:row.available===0})),low_stock_threshold:5});
+ }
+ if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status IN ('available','reserved') AND NOT EXISTS(SELECT 1 FROM order_stock os JOIN orders o ON o.id=os.order_id WHERE os.stock_id=s.id AND o.status IN ('paid','delivering','delivered') AND v.infinite_stock=0)) AS on_hand FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
  if(path==="/api/commerce/products"&&request.method==="POST"){
   const name=String(body.name||"").trim(),description=String(body.description||""),image=String(body.image_url||""),color=String(body.color||"#7135FF"),button=String(body.button_text||"Comprar"),channel=String(body.channel_id||"");
   const variants=body.variants;
@@ -119,8 +129,10 @@ export async function commerce(request,env,storeChannels){
   const variantId=url.searchParams.get("variant_id")||"";
   const variant=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(variantId,store.id).first();
   if(!variant)return fail("Variação não encontrada.",404);
-  const rows=await env.DB.prepare("SELECT id,status,created_at FROM stock WHERE variant_id=? ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
-  return json({infinite:Boolean(variant.infinite_stock),items:rows.results});
+  const rows=await env.DB.prepare("SELECT id,status,created_at,key_encrypted FROM stock WHERE variant_id=? AND status IN ('available','reserved') ORDER BY created_at DESC LIMIT 150").bind(variantId).all();
+  if(rows.results.some(r=>r.status==="available")&&!env.STOCK_ENCRYPTION_KEY)return fail("Criptografia do estoque indisponível.",503);
+  const items=await Promise.all(rows.results.map(async r=>{let value=null;if(r.status==="available")try{value=await decryptStock(r.key_encrypted,variantId,env.STOCK_ENCRYPTION_KEY);}catch{}return {id:r.id,status:r.status,created_at:r.created_at,value};}));
+  return json({infinite:Boolean(variant.infinite_stock),items});
  }
  if(path==="/api/commerce/stock/replace"&&request.method==="POST"){
   const variantId=String(body.variant_id||""),stockId=String(body.stock_id||""),value=String(body.key||"").trim();
@@ -148,11 +160,12 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
   if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
-  const v=await env.DB.prepare("SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
+  const v=await env.DB.prepare("SELECT v.id,v.product_id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
   if(!v)return fail("Variação não encontrada.",404);
-  const result=await env.DB.prepare("UPDATE variants SET infinite_stock=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE variant_id=? AND status IN ('pending','paid')) AND (?=0 OR ((SELECT count(*) FROM stock WHERE variant_id=? AND status='available')=1 AND NOT EXISTS(SELECT 1 FROM stock WHERE variant_id=? AND status='reserved')))").bind(body.infinite?1:0,v.id,v.id,body.infinite?1:0,v.id,v.id).run();
+  const result=await env.DB.prepare("UPDATE variants SET infinite_stock=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE variant_id=? AND status IN ('pending','paid','delivering')) AND (?=0 OR ((SELECT count(*) FROM stock WHERE variant_id=? AND status='available')=1 AND NOT EXISTS(SELECT 1 FROM stock WHERE variant_id=? AND status='reserved')))").bind(body.infinite?1:0,v.id,v.id,body.infinite?1:0,v.id,v.id).run();
   if(!result.meta.changes)return fail("Estoque infinito exige exatamente uma key disponível e nenhum pedido pendente.",409);
-  return json({success:true});
+  let announcement_updated=false;try{announcement_updated=await refreshProduct(env,v.product_id);}catch{}
+  return json({success:true,announcement_updated});
  }
  if(path==="/api/commerce/stock"&&request.method==="POST"){
   const v=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
@@ -182,16 +195,35 @@ export async function commerce(request,env,storeChannels){
   if(!p)return fail("Produto não encontrado.",404);
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
-  const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
-  const payload={embeds:[embed],allowed_mentions:{parse:[]},components:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}]};
+  const options=await list(inventorySQL,p.id);
+  const payload=announcement(p,options);
   const locked=await env.DB.prepare("UPDATE products SET status='publishing' WHERE id=? AND store_id=? AND status IN ('draft','active')").bind(p.id,store.id).run();
   if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
   let response;
   try{response=await call("/channels/"+p.channel_id+"/messages"+(p.message_id?"/"+p.message_id:""),{method:p.message_id?"PATCH":"POST",body:JSON.stringify({...payload,...(!p.message_id?{nonce:p.id.replaceAll("-","").slice(0,25),enforce_nonce:true}:{})})});}catch{return fail("Resultado incerto; confira o Discord antes de repetir.",502);}
-  if(!response.ok){await env.DB.prepare("UPDATE products SET status=? WHERE id=?").bind(p.status,p.id).run();return fail("Discord recusou a publicação.",502);}
+  if(!response.ok){await env.DB.prepare("UPDATE products SET status=? WHERE id=?").bind(p.status,p.id).run();const details=await response.json().catch(()=>({}));return fail("Discord recusou a publicação (HTTP "+response.status+(Number.isInteger(details.code)?" · código "+details.code:"")+").",502);}
   const message=await response.json();
   await env.DB.prepare("UPDATE products SET message_id=?,status='active' WHERE id=? AND store_id=?").bind(message.id,p.id,store.id).run();
   return json({success:true,message_id:message.id});
+ }
+ if(path==="/api/commerce/analytics"&&request.method==="GET"){
+  const days=Number(url.searchParams.get("days")||30);
+  if(![7,30,90].includes(days))return fail("Período inválido.");
+  const from="-"+(days-1)+" days";
+  const scope="o.store_id=? AND o.status IN ('paid','delivering','delivered') AND date(o.paid_at)>=date('now',?)";
+  const [daily,products,buyers,low]=await Promise.all([
+   list("SELECT date(o.paid_at) AS day,COUNT(*) AS orders,SUM(o.total_cents) AS cents FROM orders o WHERE "+scope+" GROUP BY date(o.paid_at) ORDER BY day",store.id,from),
+   list("SELECT p.id,p.name,SUM(o.quantity) AS quantity,SUM(o.total_cents) AS cents FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE "+scope+" GROUP BY p.id ORDER BY quantity DESC,p.id LIMIT 10",store.id,from),
+   list("SELECT c.username,c.discord_id,COUNT(*) AS orders,SUM(o.total_cents) AS cents FROM orders o JOIN customers c ON c.id=o.customer_id AND c.store_id=o.store_id WHERE "+scope+" GROUP BY c.id ORDER BY cents DESC,c.id LIMIT 10",store.id,from),
+   list("SELECT p.name AS product,v.name AS variant,COUNT(s.id) AS quantity FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN stock s ON s.variant_id=v.id AND s.status='available' WHERE p.store_id=? AND p.status!='archived' AND v.infinite_stock=0 GROUP BY v.id HAVING COUNT(s.id)<=5 ORDER BY quantity,p.name LIMIT 100",store.id)
+  ]);
+  const byDay=new Map(daily.map(x=>[x.day,x])),series=[];const today=new Date();today.setUTCHours(0,0,0,0);for(let offset=days-1;offset>=0;offset--){const day=new Date(today.getTime()-offset*86400000).toISOString().slice(0,10);series.push(byDay.get(day)||{day,orders:0,cents:0});}
+  return json({days,daily:series,products,buyers,low});
+ }
+ if(path==="/api/commerce/coupons/toggle"&&request.method==="POST"){
+  if(typeof body.active!=="boolean")return fail("Estado inválido.");
+  const r=await env.DB.prepare("UPDATE coupons SET active=? WHERE id=? AND store_id=?").bind(Number(body.active),String(body.coupon_id||""),store.id).run();
+  return r.meta.changes?json({success:true}):fail("Cupom não encontrado.",404);
  }
  if(path==="/api/commerce/overview"&&request.method==="GET"){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,o.paid_at,o.delivered_at,c.username,p.name AS product_name,v.name AS variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
@@ -209,17 +241,17 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,environment:"sandbox",connected:false,message:"Autenticação validada. Cobranças ainda desativadas."});
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="GET"){
-  const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
+  const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,merchant_city,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
   const orders=await list("SELECT m.order_id,m.amount_cents,m.status,m.confirmed_at,o.status AS order_status FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   return json({settings,orders});
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="POST"){
   if(body.enabled===false){await env.DB.prepare("UPDATE manual_pix_settings SET enabled=0 WHERE store_id=?").bind(store.id).run();return json({success:true});}
-  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim();
+  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim(),city=(await env.DB.prepare("SELECT merchant_city FROM manual_pix_settings WHERE store_id=?").bind(store.id).first())?.merchant_city||null;
   const patterns={CPF:/^\d{11}$/,CNPJ:/^\d{14}$/,EMAIL:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,PHONE:/^\+55\d{10,11}$/,EVP:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i};
   if(!["nubank","mercadopago","picpay","itau","inter","bradesco","caixa","bb","santander","other"].includes(bank)||!Object.hasOwn(patterns,type)||!patterns[type].test(key)||key.length>150||!recipient||recipient.length>100||/[\r\n]/.test(recipient))return fail("Informe banco, titular e chave Pix válidos. Use apenas dígitos no CPF/CNPJ e +55 no telefone.");
   if(body.accept_disclosure!==true)return fail("Confirme que a chave será exibida privadamente ao comprador.");
-  await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,enabled) VALUES(?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,enabled=1").bind(store.id,bank,type,key,recipient).run();
+  await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,merchant_city,enabled) VALUES(?,?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,merchant_city=excluded.merchant_city,enabled=1").bind(store.id,bank,type,key,recipient,city).run();
   return json({success:true});
  }
  if(path==="/api/commerce/manual-pix/confirm"&&request.method==="POST"){
@@ -229,13 +261,10 @@ export async function commerce(request,env,storeChannels){
   if(!row)return fail("Pedido Pix manual não encontrado.",404);
   if(row.status!=="pending"||row.order_status!=="pending")return fail("Pedido já processado ou indisponível.",409);
   if(row.amount_cents!==row.total_cents)return fail("Valor divergente.",409);
-  let result;
-  try{result=await env.DB.batch([
-   env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(user.id,reference,id,store.id,id),
-   env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
-  ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
-  if(!result[0].meta.changes)return fail("Pedido já processado.",409);
-  try{await announceSale(env,id);}catch{}
+  let confirmed;try{await releaseLegacyManual(env,store.id);confirmed=await confirmManual(env,{orderId:id,storeId:store.id,ownerId:user.id,reference});}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
+  if(!confirmed)return fail("Estoque esgotado ou pedido já processado. Se recebeu o Pix, providencie a devolução.",409);
+  try{await refreshAnnouncement(env,id);}catch{}
+   try{await announceSale(env,id);}catch{}
   let delivery="pending";try{delivery=await deliver(env,id);}catch{}
   return json({success:true,status:delivery==="delivered"?"delivered":"paid",delivery});
  }
@@ -314,10 +343,12 @@ export async function commerce(request,env,storeChannels){
  if(path==="/api/commerce/wallet"||path.startsWith("/api/commerce/wallet/"))return fail("EM BREVE !",503);
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount),productId=String(body.product_id||"");
+  const max=body.max_uses==null?null:Number(body.max_uses),days=body.days==null?null:Number(body.days);if((max!==null&&(!Number.isSafeInteger(max)||max<1||max>100000))||(days!==null&&(!Number.isInteger(days)||days<1||days>365)))return fail("Limite ou validade inválida.");
+  const expires=days===null?null:new Date(Date.now()+days*86400000).toISOString();
   if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100||!productId)return fail("Selecione um produto e informe um cupom válido.");
   const product=await env.DB.prepare("SELECT id FROM products WHERE id=? AND store_id=? AND status!=\'archived\'").bind(productId,store.id).first();
   if(!product)return fail("Produto não encontrado nesta loja.",404);
-  let result;try{result=await env.DB.prepare("INSERT INTO coupons(id,store_id,product_id,code,discount) VALUES(?,?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,productId,code,discount).run();}catch(error){if(String(error).includes("product_id"))return fail("Aplique a migração 0008 no banco D1.",503);throw error;}
+  let result;try{result=await env.DB.prepare("INSERT INTO coupons(id,store_id,product_id,code,discount,max_uses,expires_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,productId,code,discount,max,expires).run();}catch(error){if(String(error).includes("product_id"))return fail("Aplique a migração 0008 no banco D1.",503);throw error;}
   return result.meta.changes?json({success:true}):fail("Cupom já existe.",409);
  }
  return fail("Funcionalidade indisponível.",404);

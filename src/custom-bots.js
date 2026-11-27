@@ -1,3 +1,4 @@
+import {startGateway} from "./bot-gateway.js";
 import {getSession} from "./auth.js";
 const respond=(value,status=200)=>Response.json(value,{status,headers:{"Cache-Control":"no-store"}});
 const fail=(message,status=400)=>respond({error:message},status);
@@ -18,12 +19,21 @@ export async function botTokenForStore(env,storeId){
  if(record)return customBotToken(env,record);
  return env.DISCORD_BOT_TOKEN||null;
 }
+export async function botIdentityForStore(env,storeId){
+ let row;
+ try{row=await env.DB.prepare("SELECT token_cipher,bot_user_id FROM custom_bots WHERE store_id=?").bind(storeId).first();}
+ catch(error){if(!String(error).includes("no such table"))throw error;}
+ if(row)return {token:await customBotToken(env,row),id:row.bot_user_id};
+ return {token:env.DISCORD_BOT_TOKEN||null,id:env.DISCORD_CLIENT_ID||null};
+}
 async function discord(token,path,options={}){
  const response=await fetch("https://discord.com/api/v10"+path,{...options,headers:{Authorization:"Bot "+token,...options.headers},signal:AbortSignal.timeout(9000)});
  const data=await response.json().catch(()=>({}));
  return {ok:response.ok,status:response.status,data};
 }
-export async function customBots(request,env){
+export async function customBots(request,env,ctx){
+ const namespace=ctx?.exports?.BotGateway;
+ if(namespace)env=Object.assign(Object.create(env),{BOT_GATEWAY:namespace});
  const url=new URL(request.url);
  const user=await getSession(request,env);
  if(!user)return fail("Autenticação necessária.",401);
@@ -31,11 +41,146 @@ export async function customBots(request,env){
  if(!["GET","POST"].includes(request.method))return fail("Método não permitido.",405);
  if(request.method==="POST"&&request.headers.get("Origin")!==url.origin)return fail("Origem não autorizada.",403);
  let body={};if(request.method==="POST"){try{body=await request.json()}catch{return fail("JSON inválido.");}}
+ if(request.method==="GET"&&url.pathname==="/api/custom-bot/list"){
+  const bots=(await env.DB.prepare("SELECT c.store_id,c.application_id,c.bot_name AS name,s.name AS store_name FROM custom_bots c JOIN stores s ON s.id=c.store_id WHERE s.owner_id=? ORDER BY c.bot_name").bind(user.id).all()).results;
+  return respond({bots});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/validate"){
+  const token=String(body.token||"").trim(),guildId=String(body.guild_id||"");
+  if(!user.discord_id||!/^\d{17,20}$/.test(guildId)||token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Selecione o servidor e informe um token válido.");
+  const cached=await env.DB.prepare("SELECT guilds_json FROM discord_guild_cache WHERE user_id=? AND datetime(expires_at)>datetime('now')").bind(user.id).first();
+  if(!cached||!JSON.parse(cached.guilds_json).some(g=>g.id===guildId))return fail("Autorize a lista de servidores e selecione um servidor autorizado.",403);
+  const [identity,app]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me")]);
+  if(!identity.ok||!identity.data.bot||!app.ok||!app.data.id)return fail("Token ou aplicação inválida.",403);
+  const params=new URLSearchParams({client_id:String(app.data.id),scope:"bot applications.commands",permissions:"85008",guild_id:guildId,disable_guild_select:"true"});
+  return respond({name:identity.data.username,invite_url:"https://discord.com/oauth2/authorize?"+params.toString()});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/discover"){
+  if(!user.discord_id)return fail("Vincule sua conta Discord uma única vez para verificar suas permissões.",403);
+  const token=String(body.token||"").trim();
+  if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Informe um token de bot válido.");
+  const identity=await discord(token,"/users/@me");
+  if(!identity.ok||!identity.data.bot)return fail("Token do bot não autorizado.",403);
+  const result=await discord(token,"/users/@me/guilds?limit=200");
+  if(!result.ok||!Array.isArray(result.data))return fail("Não foi possível consultar servidores.",502);
+  const servers=[];
+  for(const g of result.data.slice(0,20)){
+   const [guild,member]=await Promise.all([discord(token,"/guilds/"+g.id),discord(token,"/guilds/"+g.id+"/members/"+user.discord_id)]);
+   if(!guild.ok||!member.ok)continue;
+   const roles=new Set([g.id,...(member.data.roles||[])]);
+   const perms=(guild.data.roles||[]).reduce((p,r)=>roles.has(r.id)?p|BigInt(r.permissions):p,0n);
+   if(guild.data.owner_id!==user.discord_id&&!(perms&40n))continue;
+   const existing=await env.DB.prepare("SELECT owner_id FROM stores WHERE guild_id=?").bind(g.id).first();
+   if(existing&&existing.owner_id!==user.id)continue;
+   servers.push({id:g.id,name:g.name});
+  }
+  return respond({servers,limited:result.data.length>20});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/link"){
+  if(!user.discord_id)return fail("Vincule sua conta Discord antes de continuar.",403);
+  const guildId=String(body.guild_id||""),token=String(body.token||"").trim();
+  if(!/^\d{17,20}$/.test(guildId)||token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("ID do servidor ou token inválido.");
+  const [identity,app,guild,member]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me"),discord(token,"/guilds/"+guildId),discord(token,"/guilds/"+guildId+"/members/"+user.discord_id)]);
+  if(!identity.ok)return fail("Discord recusou a validação do token (HTTP "+identity.status+").",403);
+  if(!identity.data.bot)return fail("A credencial informada não pertence a um bot.",403);
+  if(!app.ok||!app.data.id)return fail("Não foi possível consultar a aplicação do bot (HTTP "+app.status+").",403);
+  if(!guild.ok){
+   if(guild.status===404||guild.status===403){
+    const cached=await env.DB.prepare("SELECT guilds_json FROM discord_guild_cache WHERE user_id=? AND datetime(expires_at)>datetime('now')").bind(user.id).first();
+    if(cached&&JSON.parse(cached.guilds_json).some(g=>g.id===guildId)){
+     const params=new URLSearchParams({client_id:String(app.data.id),scope:"bot applications.commands",permissions:"85008",guild_id:guildId,disable_guild_select:"true"});
+     return respond({success:false,needs_install:true,invite_url:"https://discord.com/oauth2/authorize?"+params.toString()});
+    }
+   }
+   return fail("O bot não conseguiu acessar o servidor selecionado (HTTP "+guild.status+"). Instale seu bot nesse servidor e tente novamente.",403);
+  }
+  if(!member.ok)return fail("Não foi possível verificar sua conta como membro do servidor (HTTP "+member.status+"). Confira a conta Discord vinculada.",403);
+  const roles=new Set([guildId,...(member.data.roles||[])]);
+  const perms=(guild.data.roles||[]).reduce((p,r)=>roles.has(r.id)?p|BigInt(r.permissions):p,0n);
+  if(guild.data.owner_id!==user.discord_id&&!(perms&40n))return fail("Você não tem permissão para gerenciar este servidor.",403);
+  if(!/^[a-f0-9]{64}$/i.test(app.data.verify_key||""))return fail("Chave pública indisponível.",502);
+  const existing=await env.DB.prepare("SELECT id,owner_id FROM stores WHERE guild_id=?").bind(guildId).first();
+  if(existing&&existing.owner_id!==user.id)return fail("Servidor já vinculado.",409);
+  const storeId=existing?.id||crypto.randomUUID(),cipher=await seal(env,token);
+  try{
+   await env.DB.batch([
+    env.DB.prepare("INSERT INTO stores(id,owner_id,name,guild_id) VALUES(?,?,?,?) ON CONFLICT(guild_id) DO NOTHING").bind(storeId,user.id,String(guild.data.name||"Servidor").slice(0,100),guildId),
+    env.DB.prepare("INSERT INTO custom_bots(store_id,application_id,bot_user_id,public_key,token_cipher,bot_name) VALUES(?,?,?,?,?,?) ON CONFLICT(store_id) DO UPDATE SET token_cipher=excluded.token_cipher,public_key=excluded.public_key,bot_name=excluded.bot_name,updated_at=CURRENT_TIMESTAMP WHERE custom_bots.application_id=excluded.application_id").bind(storeId,app.data.id,identity.data.id,app.data.verify_key,cipher,identity.data.username||"Bot")
+   ]);
+  }catch{return fail("Não foi possível vincular. Verifique se o bot ou servidor já está em uso.",409);}
+  const linked=await env.DB.prepare("SELECT c.application_id FROM custom_bots c JOIN stores s ON s.id=c.store_id WHERE s.id=? AND s.owner_id=?").bind(storeId,user.id).first();
+  if(linked?.application_id!==app.data.id)return fail("Já existe outro bot conectado.",409);
+  const gateway=await startGateway(env,storeId);
+  return respond({success:true,gateway,store_id:storeId,interactions_url:url.origin+"/discord/interactions/"+app.data.id});
+ }
  const storeId=String(body.store_id||url.searchParams.get("store")||"");
  const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
  if(!store)return fail("Servidor não encontrado ou sem permissão.",404);
  const current=await env.DB.prepare("SELECT store_id,application_id,bot_user_id,bot_name,public_key,token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();
- if(request.method==="GET")return respond({connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions/"+current.application_id}:null});
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/presence"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const status=body.status,activity=String(body.activity||"").trim(),type=Number(body.type);
+  if(!["online","idle","dnd","invisible"].includes(status)||activity.length>100||![0,2,3,5].includes(type))return fail("Presença inválida.");
+  const gateway=await startGateway(env,storeId,"presence",{presence:{status,activities:activity?[{name:activity,type}]:[],afk:false,since:null}});
+  if(gateway.state==="unavailable")return fail("Gateway indisponível: "+gateway.reason,503);
+  return respond({gateway});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/commands"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const token=await customBotToken(env,current),path="/applications/"+current.application_id+"/guilds/"+store.guild_id+"/commands";
+  const commands=[{name:"ping",description:"Testar conexão"},{name:"zynox",description:"Conhecer a ZYNOX"},{name:"ajuda",description:"Comandos disponíveis"}];
+  const results=[];
+  for(const command of commands){const r=await discord(token,path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(command)});results.push({name:command.name,ok:r.ok,status:r.status});}
+  return respond({success:results.every(r=>r.ok),results});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/replace-token"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const token=String(body.token||"").trim();if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Token inválido.");
+  const [identity,app,member]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me"),discord(token,"/guilds/"+store.guild_id+"/members/"+current.bot_user_id)]);
+  if(!identity.ok||!app.ok||!member.ok||identity.data.id!==current.bot_user_id||app.data.id!==current.application_id)return fail("O token precisa pertencer ao mesmo bot e servidor.",403);
+  await env.DB.prepare("UPDATE custom_bots SET token_cipher=?,updated_at=CURRENT_TIMESTAMP WHERE store_id=? AND application_id=?").bind(await seal(env,token),storeId,current.application_id).run();
+  return respond({success:true,gateway:await startGateway(env,storeId,"restart")});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/disconnect"){
+  if(!current||body.confirm!==true)return fail("Confirme a desconexão.");
+  const gateway=await startGateway(env,storeId,"disable");
+  if(gateway.state==="unavailable")return fail("Não foi possível desligar o Gateway: "+gateway.reason,503);
+  await env.DB.prepare("DELETE FROM custom_bots WHERE store_id=? AND application_id=?").bind(storeId,current.application_id).run();
+  return respond({success:true});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/power"){
+  if(!current)return fail("Bot não encontrado.",404);
+  if(!["enable","disable","restart"].includes(body.action))return fail("Ação inválida.");
+  const gateway=await startGateway(env,storeId,body.action);
+  if(gateway.state==="unavailable")return fail("Gateway indisponível: "+gateway.reason,503);
+  return respond({success:true,gateway});
+ }
+ if(request.method==="GET"&&url.pathname==="/api/custom-bot/details"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const token=await customBotToken(env,current);
+  const safe=async path=>{try{return await discord(token,path);}catch{return {ok:false,status:0,data:{}};}};
+  const [identity,app,member,gateway]=await Promise.all([safe("/users/@me"),safe("/oauth2/applications/@me"),safe("/guilds/"+store.guild_id+"/members/"+current.bot_user_id),startGateway(env,storeId)]);
+  const u=identity.data||{},cdn=(kind,hash)=>hash&&u.id?"https://cdn.discordapp.com/"+kind+"/"+u.id+"/"+hash+"."+(hash.startsWith("a_")?"gif":"png")+"?size=512":null;
+  return respond({name:identity.ok?u.username:current.bot_name,nickname:member.ok?(member.data.nick||""):null,bio:app.ok?(app.data.description||""):null,avatar_url:identity.ok?cdn("avatars",u.avatar):null,banner_url:identity.ok?cdn("banners",u.banner):null,gateway,interactions_url:url.origin+"/discord/interactions/"+current.application_id,unavailable:[...(!identity.ok?["Foto, banner e nome (HTTP "+identity.status+")"]:[]),...(!app.ok?["Biografia (HTTP "+app.status+")"]:[]),...(!member.ok?["Apelido (HTTP "+member.status+")"]:[])]});
+ }
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/save"){
+  if(!current)return fail("Bot não encontrado.",404);
+  const changes=body.changes;
+  if(!changes||typeof changes!=="object"||Array.isArray(changes))return fail("Alterações inválidas.");
+  const allowed=["avatar","banner","bio","nickname"];
+  if(Object.keys(changes).some(k=>!allowed.includes(k)))return fail("Campo inválido.");
+  for(const k of ["avatar","banner"])if(k in changes&&(typeof changes[k]!=="string"||changes[k].length>1400000||!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(changes[k])))return fail("Imagem inválida ou superior a 1 MB.");
+  if("bio" in changes&&(typeof changes.bio!=="string"||changes.bio.length>400))return fail("Biografia inválida.");
+  if("nickname" in changes&&(typeof changes.nickname!=="string"||changes.nickname.length>32))return fail("Apelido inválido.");
+  const token=await customBotToken(env,current),results={};
+  const patch=async(path,data)=>discord(token,path,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  for(const k of allowed){if(!(k in changes))continue;try{
+   const res=await (k==="bio"?patch("/applications/@me",{description:changes[k]}):k==="nickname"?patch("/guilds/"+store.guild_id+"/members/@me",{nick:changes[k]||null}):patch("/users/@me",{[k]:changes[k]}));
+   results[k]={ok:res.ok,status:res.status};
+  }catch{results[k]={ok:false,status:0};}}
+  return respond({success:Object.values(results).every(r=>r.ok),results});
+ }
+ if(request.method==="GET"){const gateway=current?await startGateway(env,storeId):{state:"offline"};return respond({gateway,connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions/"+current.application_id}:null});}
  if(url.pathname==="/api/custom-bot/connect"){
   const token=String(body.token||"").trim();
   if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Token do bot inválido.");
@@ -52,7 +197,8 @@ export async function customBots(request,env){
   if(existing)return fail("Este bot já está conectado a outra loja.",409);
   const cipher=await seal(env,token);
   await env.DB.prepare("INSERT INTO custom_bots(store_id,application_id,bot_user_id,public_key,token_cipher,bot_name) VALUES(?,?,?,?,?,?) ON CONFLICT(store_id) DO UPDATE SET token_cipher=excluded.token_cipher,public_key=excluded.public_key,bot_name=excluded.bot_name,updated_at=CURRENT_TIMESTAMP").bind(storeId,app.data.id,identity.data.id,app.data.verify_key,cipher,identity.data.username||"Bot").run();
-  return respond({connected:true,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions/"+app.data.id});
+  const gateway=await startGateway(env,storeId);
+  return respond({connected:true,gateway,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions/"+app.data.id});
  }
  if(url.pathname==="/api/custom-bot/profile"){
   if(!current)return fail("Conecte seu bot primeiro.",409);
