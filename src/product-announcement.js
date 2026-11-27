@@ -3,10 +3,11 @@ export const inventorySQL="SELECT v.*,(SELECT count(*) FROM stock st WHERE st.va
 export const inventoryLabel=v=>v.infinite_stock&&v.on_hand>0?"Infinito":String(v.on_hand);
 export function announcement(p,options){
  const price=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n/100);
- const lines=options.map(v=>v.name.slice(0,80)+" • "+price(v.price_cents)+" • Estoque: "+inventoryLabel(v));
+ const multiple=Boolean(p.has_variations&&options.length>1);
+ const lines=multiple?[]:options.map(v=>v.name.slice(0,80)+" • "+price(v.price_cents)+" • Estoque: "+inventoryLabel(v));
  const fields=[];let chunk="";for(const line of lines){if((chunk+"\n"+line).length>1000){fields.push({name:fields.length?"Estoque (continuação)":"Preços e estoque",value:chunk});chunk="";}chunk+=(chunk?"\n":"")+line;}if(chunk)fields.push({name:fields.length?"Estoque (continuação)":"Preços e estoque",value:chunk});
  const embed={title:p.name,description:String(p.description||"").slice(0,1900)||undefined,color:parseInt(p.color.slice(1),16),fields,...(p.image_url?{image:{url:p.image_url}}:{})};
- const components=p.has_variations&&options.length>1?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)+" • Estoque: "+inventoryLabel(v)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:!options.some(v=>v.on_hand>0)}]}];
+ const components=multiple?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)+" • Estoque: "+inventoryLabel(v)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:!options.some(v=>v.on_hand>0)}]}];
  return {embeds:[embed],components,allowed_mentions:{parse:[]}};
 }
 export async function refreshAnnouncement(env,orderId){
