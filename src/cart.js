@@ -7,7 +7,7 @@ import {announceSale} from "./sale-notifications.js";
 export async function cart(interaction,env){
  const reply=(content,components=[])=>({type:4,data:{content,components,flags:64,allowed_mentions:{parse:[]}}});
  const custom=interaction.data?.custom_id||"";
- let action=["buy:","pick:","choose:","checkout:","close:","confirm-sale:","confirm-pix:"].find(x=>custom.startsWith(x));
+ let action=["buy:","pick:","choose:","checkout:","close:","copy-pix:","confirm-sale:","confirm-pix:"].find(x=>custom.startsWith(x));
  if(!action)return null;
  let ref=custom.slice(action.length);
  if(action==="pick:"){ref=String(interaction.data?.values?.[0]||"");}
@@ -36,6 +36,16 @@ export async function cart(interaction,env){
   else if(actor!==buyer&&!(action==="close:"&&owner))return reply("Este carrinho não pertence a você.");
   if(action==="checkout:"&&chosen&&chosen!==ref)return reply("Variação não pertence ao carrinho.");
   const orderId="cart:"+privateChannel;
+  if(action==="copy-pix:"){
+   const order=await env.DB.prepare("SELECT o.id FROM orders o JOIN manual_pix_orders m ON m.order_id=o.id JOIN customers cu ON cu.id=o.customer_id JOIN variants v ON v.id=o.variant_id WHERE o.id=? AND o.store_id=? AND cu.discord_id=? AND v.product_id=? AND o.status='pending' AND m.status='pending'").bind(orderId,p.store_id,buyer,p.id).first();
+   if(!order)return reply("Este pedido não está aguardando pagamento.");
+   // Copy the original payment message, never regenerate from mutable bank settings.
+   if(String(interaction.message?.author?.id)!==String(bot.id))return reply("Mensagem de pagamento inválida.");
+   const field=interaction.message?.embeds?.flatMap(e=>e.fields||[]).find(f=>f.name==="Pix copia e cola"||f.name.startsWith("Chave Pix ("));
+   const value=field?.value;
+   if(typeof value!=="string"||!value.trim()||value.length>1024)return reply("Código indisponível. Confira a mensagem de pagamento.");
+   return reply(value);
+  }
   if(action==="close:"){
    const order=await env.DB.prepare("SELECT status FROM orders WHERE id=? AND store_id=?").bind(orderId,p.store_id).first();
    // Closing the Discord channel never cancels a bank payment or releases its stock.
@@ -113,7 +123,7 @@ export async function cart(interaction,env){
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
    const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
-   return publish(paymentEmbed,[{type:1,components:[{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
+   return publish(paymentEmbed,[{type:1,components:[{type:2,style:1,label:"Copiar Pix",emoji:{name:"📋"},custom_id:"copy-pix:"+p.id},{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");
  }

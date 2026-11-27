@@ -74,7 +74,7 @@ export class BotGateway {
   const replies={ping:"🏓 Pong! ZYNOX está respondendo.",zynox:"ZYNOX — automação de vendas.",ajuda:"Comandos: /ping, /zynox, /ajuda."};
   const send=async payload=>fetch("https://discord.com/api/v10/interactions/"+encodeURIComponent(i.id)+"/"+encodeURIComponent(i.token)+"/callback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
   if(i.type===2&&Object.hasOwn(replies,i.data?.name))return send({type:4,data:{content:replies[i.data.name],flags:64,allowed_mentions:{parse:[]}}});
-  if([3,5].includes(i.type)&&/^(buy:|pick:|choose:|checkout:|close:|confirm-sale:|confirm-pix:)/.test(i.data?.custom_id||"")){
+  if([3,5].includes(i.type)&&/^(buy:|pick:|choose:|checkout:|close:|copy-pix:|confirm-sale:|confirm-pix:)/.test(i.data?.custom_id||"")){
    const ack=await send({type:5,data:{flags:64}});if(!ack.ok)return;
    let result;try{result=await cart(i,this.env);}catch{}
    await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(row.application_id)+"/"+encodeURIComponent(i.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(result?.data?{content:result.data.content,components:result.data.components||[],allowed_mentions:{parse:[]}}:{content:"Não foi possível concluir a operação."})});
