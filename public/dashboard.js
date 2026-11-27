@@ -1382,20 +1382,20 @@ function navigate(page) {
       const cover=node("div",undefined,"bot-profile-cover");
       if(result.banner_url){const img=node("img");img.src=result.banner_url;img.alt="Banner atual";cover.append(img);}
       const identity=node("div",undefined,"bot-profile-identity"),avatar=node("img");avatar.src=result.avatar_url||"/zynox-logo.svg";avatar.alt="Foto atual do bot";avatar.className="bot-profile-avatar";
-      const name=node("div",undefined,"bot-identity");name.append(node("strong",result.name),node("small",result.nickname||"Sem apelido no servidor"));
+      const name=node("div",undefined,"bot-identity");name.append(node("strong",result.name),node("small",result.nickname===null?"Apelido não consultado":result.nickname||"Sem apelido no servidor"));
       const state=result.gateway?.state||"unavailable";identity.append(avatar,name,node("span",labels[state]||"Não verificado","bot-presence "+state));preview.append(cover,identity);host.append(preview);
       const grid=node("div",undefined,"bot-settings-grid"),pickers={};
       for(const kind of ["avatar","banner"]){
         const card=node("section",undefined,"bot-setting-card"),picker=node("input");picker.type="file";picker.accept="image/png,image/jpeg,image/gif,image/webp";picker.setAttribute("aria-label",kind==="avatar"?"Nova foto":"Novo banner");pickers[kind]=picker;
         card.append(node("h3",kind==="avatar"?"Foto de perfil":"Banner"),node("p","Até 1 MB"),picker);grid.append(card);
       }
-      const bio=node("textarea");bio.value=result.bio;bio.maxLength=400;bio.rows=3;
-      const nick=input("Apelido neste servidor");nick.value=result.nickname;nick.maxLength=32;
+      const bio=node("textarea");bio.value=result.bio??"";bio.maxLength=400;bio.rows=3;
+      const nick=input("Apelido neste servidor");nick.value=result.nickname??"";nick.maxLength=32;
       const bioCard=node("section",undefined,"bot-setting-card"),nickCard=node("section",undefined,"bot-setting-card");
       bioCard.append(field("Biografia",bio));nickCard.append(field("Apelido",nick));grid.append(bioCard,nickCard);host.append(grid);
-      const feedback=node("p","","bot-inline-status");feedback.setAttribute("role","status");
+      const feedback=node("p",result.unavailable?.length?"Consulta parcial: "+result.unavailable.join("; ")+". Os campos não consultados podem ser preenchidos manualmente.":"","bot-inline-status");feedback.setAttribute("role","status");
       const save=button("Salvar",async()=>{
-        const changes={};if(bio.value!==result.bio)changes.bio=bio.value;if(nick.value!==result.nickname)changes.nickname=nick.value;
+        const changes={};if(bio.value!==(result.bio??""))changes.bio=bio.value;if(nick.value!==(result.nickname??""))changes.nickname=nick.value;
         for(const kind of ["avatar","banner"]){const file=pickers[kind].files?.[0];if(file)changes[kind]=await imageFile(file);}
         if(!Object.keys(changes).length){feedback.textContent="Nenhuma alteração.";return;}
         const response=await api("/api/custom-bot/save",{store_id:id,changes});

@@ -111,10 +111,10 @@ export async function customBots(request,env){
  if(request.method==="GET"&&url.pathname==="/api/custom-bot/details"){
   if(!current)return fail("Bot não encontrado.",404);
   const token=await customBotToken(env,current);
-  const [identity,app,member,gateway]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me"),discord(token,"/guilds/"+store.guild_id+"/members/@me"),startGateway(env,storeId)]);
-  if(!identity.ok||!app.ok||!member.ok)return fail("Não foi possível consultar o perfil atual do bot no Discord.",502);
-  const u=identity.data,cdn=(kind,hash)=>hash?"https://cdn.discordapp.com/"+kind+"/"+u.id+"/"+hash+"."+ (hash.startsWith("a_")?"gif":"png")+"?size=512":null;
-  return respond({name:u.username,nickname:member.data.nick||"",bio:app.data.description||"",avatar_url:cdn("avatars",u.avatar),banner_url:cdn("banners",u.banner),gateway,interactions_url:url.origin+"/discord/interactions/"+current.application_id});
+  const safe=async path=>{try{return await discord(token,path);}catch{return {ok:false,status:0,data:{}};}};
+  const [identity,app,member,gateway]=await Promise.all([safe("/users/@me"),safe("/oauth2/applications/@me"),safe("/guilds/"+store.guild_id+"/members/"+current.bot_user_id),startGateway(env,storeId)]);
+  const u=identity.data||{},cdn=(kind,hash)=>hash&&u.id?"https://cdn.discordapp.com/"+kind+"/"+u.id+"/"+hash+"."+(hash.startsWith("a_")?"gif":"png")+"?size=512":null;
+  return respond({name:identity.ok?u.username:current.bot_name,nickname:member.ok?(member.data.nick||""):null,bio:app.ok?(app.data.description||""):null,avatar_url:identity.ok?cdn("avatars",u.avatar):null,banner_url:identity.ok?cdn("banners",u.banner):null,gateway,interactions_url:url.origin+"/discord/interactions/"+current.application_id,unavailable:[...(!identity.ok?["Foto, banner e nome (HTTP "+identity.status+")"]:[]),...(!app.ok?["Biografia (HTTP "+app.status+")"]:[]),...(!member.ok?["Apelido (HTTP "+member.status+")"]:[])]});
  }
  if(request.method==="POST"&&url.pathname==="/api/custom-bot/save"){
   if(!current)return fail("Bot não encontrado.",404);
