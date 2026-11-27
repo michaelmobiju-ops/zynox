@@ -431,6 +431,14 @@ export default {
         return json({success:true,enabled:Boolean(enabled)});
       }
 
+      if(path==="/api/discord/my-guilds"){
+        if(request.method!=="GET")return json({error:"Método não permitido."},405);
+        const user=await getSession(request,env);
+        if(!user)return json({error:"Autenticação necessária."},401);
+        if(!isAdmin(user)&&!await getSubscription(env,user.id))return json({error:"Assinatura necessária."},403);
+        const row=await env.DB.prepare("SELECT guilds_json FROM discord_guild_cache WHERE user_id=? AND datetime(expires_at)>datetime('now')").bind(user.id).first();
+        return json({servers:row?JSON.parse(row.guilds_json):[],needsAuthorization:!row});
+      }
       if (path === "/api/discord/servers") {
         if (request.method !== "GET") return json({error:"Método não permitido."},405);
         const user = await getSession(request,env);

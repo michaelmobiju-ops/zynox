@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS discord_guild_cache(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,guilds_json TEXT NOT NULL,expires_at TEXT NOT NULL);

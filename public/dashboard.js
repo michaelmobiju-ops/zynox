@@ -1361,26 +1361,22 @@ function navigate(page) {
       await api("/api/custom-bot/connect",{store_id:storeSelect.value,token:token.value.trim()});
       token.value="";await refresh();toast("Token validado e protegido.",true);
     }),connection,profile);
-    const direct=panel("Conectar um novo servidor","Use seu próprio bot, sem instalar o bot oficial da ZYNOX.");
-    const guildInput=input("ID do servidor Discord");
+    const direct=panel("Conectar meu próprio bot","Selecione seu servidor Discord e informe o token do bot.");
+    const guildInput=input("ID do servidor (opcional)");
+    const discovered=select([["","Carregando servidores..."]]);
     const directToken=input("Token do bot");directToken.type="password";directToken.autocomplete="off";
-    const discovered=select([["","Escolha um servidor do Discord"]]);
-    const discoveryStatus=node("p","Informe o token para buscar os servidores onde seu bot está instalado.");
-    discovered.addEventListener("change",()=>{if(discovered.value)guildInput.value=discovered.value;});
-    direct.append(field("Selecionar servidor do Discord",discovered),discoveryStatus,button("Buscar servidores do meu bot",async()=>{
-      discovered.replaceChildren(new Option("Escolha um servidor do Discord",""));
-      discoveryStatus.textContent="Consultando Discord...";
-      try{
-        const result=await api("/api/custom-bot/discover",{token:directToken.value.trim()});
-        for(const g of result.servers)discovered.append(new Option(g.name,g.id));
-        discoveryStatus.textContent=result.servers.length?"Selecione um servidor para continuar."+(result.limited?" Consulta limitada aos primeiros 20 servidores do bot.":""):"Nenhum servidor autorizado encontrado. Instale o bot no servidor ou informe o ID manualmente.";
-      }catch(e){discoveryStatus.textContent=e.message;}
-    }));
-    direct.append(button("Voltar aos servidores",()=>navigate("servers")),node("p","Instale seu bot no servidor. Escolha na lista acima ou informe o ID manualmente."),field("ID do servidor (alternativa manual)",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
+    const discoveryStatus=node("p","");
+    const authorize=button("Autorizar lista de servidores",()=>location.href="/auth/discord/link");authorize.hidden=true;
+    discovered.addEventListener("change",()=>{guildInput.value=discovered.value;});
+    direct.append(button("Voltar aos servidores",()=>navigate("servers")),field("Servidor do Discord",discovered),discoveryStatus,authorize,field("ID manual (alternativa)",guildInput),guide,field("Token do bot próprio",directToken),button("Conectar meu bot",async()=>{
       try{await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});toast("Servidor vinculado.",true);navigate("bot");}finally{directToken.value="";}
     }));
-    if(!ZYNOX.user.discord_id)direct.append(button("Vincular minha conta Discord",()=>location.href="/auth/discord/link"));
     main.append(direct,box);
+    api("/api/discord/my-guilds").then(result=>{
+      discovered.replaceChildren(new Option("Selecione o servidor",""),...result.servers.map(g=>new Option(g.name,g.id)));
+      authorize.hidden=!result.needsAuthorization;
+      discoveryStatus.textContent=result.needsAuthorization?"Autorize o acesso à lista de servidores uma vez.":result.servers.length?"Escolha um servidor que você administra.":"Nenhum servidor com permissão de gerenciamento encontrado.";
+    }).catch(e=>{discoveryStatus.textContent=e.message;});
     async function refresh(){
       profile.replaceChildren();
       if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}
@@ -1408,6 +1404,7 @@ function navigate(page) {
       const stores=data.stores||[];
       storeSelect.replaceChildren(...stores.map(st=>{const o=node("option",st.name);o.value=st.id;return o;}));
       if(ZYNOX.store&&stores.some(st=>st.id===ZYNOX.store.id))storeSelect.value=ZYNOX.store.id;
+      box.hidden=!stores.length;
       if(stores.length)refresh().catch(e=>connection.textContent=e.message);
     }).catch(e=>connection.textContent="Não foi possível carregar servidores: "+e.message);
     return;
