@@ -21,7 +21,7 @@ export class BotGateway {
   if(!this.socket&&!this.busy)await this.start(storeId);
   return Response.json(await this.snapshot());
  }
- async snapshot(){return {checkout_version:"checkout-v5",state:this.state,enabled:(await this.ctx.storage.get("enabled"))!==false,presence:await this.ctx.storage.get("presence")||{status:"online",activities:[],afk:false,since:null},lastReady:this.lastReady,lastAck:this.lastAck,lastError:this.lastError};}
+ async snapshot(){return {checkout_version:"checkout-v6",state:this.state,enabled:(await this.ctx.storage.get("enabled"))!==false,presence:await this.ctx.storage.get("presence")||{status:"online",activities:[],afk:false,since:null},lastReady:this.lastReady,lastAck:this.lastAck,lastError:this.lastError};}
  stop(){clearInterval(this.heartbeat);const socket=this.socket;this.socket=null;this.state="offline";try{socket?.close(1000,"Reconnect");}catch{}}
  async alarm(){
   const id=await this.ctx.storage.get("storeId");
@@ -76,7 +76,7 @@ export class BotGateway {
   if(i.type===2&&Object.hasOwn(replies,i.data?.name))return send({type:4,data:{content:replies[i.data.name],flags:64,allowed_mentions:{parse:[]}}});
   if([3,5].includes(i.type)&&/^(buy:|pick:|choose:|checkout:|close:|copy-pix:|confirm-sale:|confirm-pix:)/.test(i.data?.custom_id||"")){
    const ack=await send({type:5,data:{flags:64}});if(!ack.ok)return;
-   let result;try{result=await cart(i,this.env);}catch{}
+   let result;try{result=await cart(i,this.env,this.ctx);}catch{}
    await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(row.application_id)+"/"+encodeURIComponent(i.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(result?.data?{content:result.data.content,components:result.data.components||[],allowed_mentions:{parse:[]}}:{content:"Não foi possível concluir a operação."})});
   }
  }

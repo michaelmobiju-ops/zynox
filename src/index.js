@@ -144,7 +144,7 @@ export default {
 
     try {
 
-      if (path === "/api/checkout-version") return json({version:"checkout-v5"});
+      if (path === "/api/checkout-version") return json({version:"checkout-v6"});
       if (path === "/api/monitor/health") return monitor(request,env);
       if (path === "/api/owner/metrics") return ownerMetrics(request,env);
       if (path.startsWith("/api/shield/")) return shield(request,env);
@@ -190,7 +190,7 @@ export default {
           if(paused&&paused.enabled===0)return json({type:4,data:{content:"ZYNOX está pausado neste servidor.",flags:64}});
         }
         if ([3,5].includes(interaction.type)) { const ticket=interaction.type===3?await ticketInteraction(interaction,env,ctx):null;if(ticket)return json(ticket);if(/^(buy:|pick:|choose:|checkout:|close:|copy-pix:|confirm-sale:|confirm-pix:)/.test(interaction.data?.custom_id||"")){
-          ctx.waitUntil((async()=>{let result;try{result=await cart(interaction,env);}catch{}try{await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(interaction.application_id)+"/"+encodeURIComponent(interaction.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:result?.data?.content||"Não foi possível abrir o carrinho.",components:result?.data?.components||[],allowed_mentions:{parse:[]}})});}catch{}})());
+          ctx.waitUntil((async()=>{let result;try{result=await cart(interaction,env,ctx);}catch{}try{await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(interaction.application_id)+"/"+encodeURIComponent(interaction.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:result?.data?.content||"Não foi possível abrir o carrinho.",components:result?.data?.components||[],allowed_mentions:{parse:[]}})});}catch{}})());
           return json({type:5,data:{flags:64}});
          } }
         const replies = {

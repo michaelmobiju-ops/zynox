@@ -5,7 +5,7 @@ import {botIdentityForStore} from "./custom-bots.js";
 import {pixPayload,qrGif} from "./pix-qr.js";
 import {deliver} from "./payment-webhook.js";
 import {announceSale} from "./sale-notifications.js";
-export async function cart(interaction,env){
+export async function cart(interaction,env,ctx){
  const reply=(content,components=[])=>({type:4,data:{content,components,flags:64,allowed_mentions:{parse:[]}}});
  const custom=interaction.data?.custom_id||"";
  let action=["buy:","pick:","choose:","checkout:","close:","copy-pix:","confirm-sale:","confirm-pix:"].find(x=>custom.startsWith(x));
@@ -62,7 +62,10 @@ export async function cart(interaction,env){
    if(!confirmed)return reply("Estoque esgotado ou pedido já processado. Se houve pagamento, confira o extrato e providencie a devolução ao comprador.");
    let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}
    let updated=false;try{updated=await refreshAnnouncement(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
-   await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"Pagamento confirmado. Produto enviado na DM do comprador.":"Pagamento confirmado. Entrega pendente de revisão.",allowed_mentions:{parse:[]}});
+   const notice=await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"✅ Pagamento confirmado! Produto enviado na DM do comprador.\nO carrinho será fechado em 10 segundos.":"Pagamento confirmado. Entrega pendente de revisão. O carrinho permanecerá aberto.",allowed_mentions:{parse:[]}});
+   if(delivery==="delivered"&&notice.ok&&ctx?.waitUntil){
+    ctx.waitUntil((async()=>{await new Promise(resolve=>setTimeout(resolve,10000));try{const channelRes=await call("/channels/"+privateChannel);if(!channelRes.ok)return;const latest=await channelRes.json();if(latest.topic!==channel.topic||!validChannel(latest,buyer))return;const deleted=await call("/channels/"+privateChannel,"DELETE");if(!deleted.ok&&deleted.status!==404)await call("/channels/"+privateChannel+"/messages","POST",{content:"Não foi possível fechar automaticamente. Use Fechar carrinho.",allowed_mentions:{parse:[]}});}catch{}})());
+   }
    return reply((delivery==="delivered"?"Venda confirmada e entregue.":"Venda confirmada. Confira a entrega no painel.")+(updated?"":" Não foi possível atualizar o anúncio automaticamente. Atualize pelo painel."));
   }
  }
@@ -123,7 +126,7 @@ export async function cart(interaction,env){
   if(pix){
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   const paymentEmbed={author:{name:brand.name+" • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v5":"Pix por chave • QR indisponível sem cidade cadastrada • v5"}};
+   const paymentEmbed={author:{name:brand.name+" • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v6":"Pix por chave • QR indisponível sem cidade cadastrada • v6"}};
    return publish(paymentEmbed,[{type:1,components:[{type:2,style:1,label:"Copiar Pix",emoji:{name:"📋"},custom_id:"copy-pix:"+p.id},{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");

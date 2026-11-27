@@ -217,7 +217,8 @@ export async function commerce(request,env,storeChannels){
    list("SELECT c.username,c.discord_id,COUNT(*) AS orders,SUM(o.total_cents) AS cents FROM orders o JOIN customers c ON c.id=o.customer_id AND c.store_id=o.store_id WHERE "+scope+" GROUP BY c.id ORDER BY cents DESC,c.id LIMIT 10",store.id,from),
    list("SELECT p.name AS product,v.name AS variant,COUNT(s.id) AS quantity FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN stock s ON s.variant_id=v.id AND s.status='available' WHERE p.store_id=? AND p.status!='archived' AND v.infinite_stock=0 GROUP BY v.id HAVING COUNT(s.id)<=5 ORDER BY quantity,p.name LIMIT 100",store.id)
   ]);
-  return json({days,daily,products,buyers,low});
+  const byDay=new Map(daily.map(x=>[x.day,x])),series=[];const today=new Date();today.setUTCHours(0,0,0,0);for(let offset=days-1;offset>=0;offset--){const day=new Date(today.getTime()-offset*86400000).toISOString().slice(0,10);series.push(byDay.get(day)||{day,orders:0,cents:0});}
+  return json({days,daily:series,products,buyers,low});
  }
  if(path==="/api/commerce/coupons/toggle"&&request.method==="POST"){
   if(typeof body.active!=="boolean")return fail("Estado inválido.");
