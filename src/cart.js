@@ -1,3 +1,4 @@
+import {refreshAnnouncement} from "./product-announcement.js";
 import {botIdentityForStore} from "./custom-bots.js";
 import {pixPayload,qrGif} from "./pix-qr.js";
 import {deliver} from "./payment-webhook.js";
@@ -39,18 +40,14 @@ export async function cart(interaction,env){
    // Pending and paid orders remain available in the authenticated sales panel.
    const deleted=await call("/channels/"+privateChannel,"DELETE");return reply(deleted.ok?(order&&["pending","paid","delivering"].includes(order.status)?"Carrinho fechado. O pedido permanece no histórico para conferência e entrega.":"Carrinho fechado."):"Não foi possível fechar o carrinho.");
   }
-  if(action==="confirm-sale:"){
-   const row=await env.DB.prepare("SELECT m.status,o.status AS order_status FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.order_id=? AND m.store_id=?").bind(orderId,p.store_id).first();
-   if(!row||row.status!=="pending"||row.order_status!=="pending")return reply("Pedido não está aguardando confirmação.");
-   return {type:9,data:{custom_id:"confirm-pix:"+p.id,title:"Confirmar recebimento Pix",components:[{type:1,components:[{type:4,custom_id:"reference",label:"EndToEndId do crédito no extrato",style:1,required:true,min_length:32,max_length:32}]}]}};
-  }
-  if(action==="confirm-pix:"){
-   const reference=String(interaction.data?.components?.flatMap(x=>x.components||[]).find(x=>x.custom_id==="reference")?.value||"").trim();
-   if(!/^E[0-9A-Za-z]{31}$/.test(reference))return reply("Informe o EndToEndId real do crédito conferido no extrato.");
+  if(action==="confirm-sale:"||action==="confirm-pix:"){
+   // Manual owner attestation, not a bank-verified transaction.
+   const reference=null;
    const row=await env.DB.prepare("SELECT m.status,o.status AS order_status,m.amount_cents,o.total_cents FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.order_id=? AND m.store_id=?").bind(orderId,p.store_id).first();
    if(!row||row.status!=="pending"||row.order_status!=="pending"||row.amount_cents!==row.total_cents)return reply("Pedido indisponível para confirmação.");
-   let result;try{result=await env.DB.batch([env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(p.owner_id,reference,orderId,p.store_id,orderId),env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(orderId,p.store_id,orderId,reference)]);}catch{return reply("Referência já utilizada ou confirmação indisponível.");}
+   let result;try{result=await env.DB.batch([env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(p.owner_id,reference,orderId,p.store_id,orderId),env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND confirmed_by=?)").bind(orderId,p.store_id,orderId,p.owner_id)]);}catch{return reply("Referência já utilizada ou confirmação indisponível.");}
    if(!result[0].meta.changes)return reply("Pedido já processado.");
+   try{await refreshAnnouncement(env,orderId);}catch{}
    let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
    await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"Pagamento confirmado. Produto enviado na DM do comprador.":"Pagamento confirmado. Entrega pendente de revisão.",allowed_mentions:{parse:[]}});
    return reply(delivery==="delivered"?"Venda confirmada e entregue.":"Venda confirmada. Confira a entrega no painel.");
@@ -67,7 +64,7 @@ export async function cart(interaction,env){
  const cartEmbed=variant=>({author:{name:"CHECKOUT • COMPRA PRIVADA"},title:"🛒 "+p.name,description:String(p.description||"Produto digital").slice(0,4000),color:parseInt(String(p.color||"#7C3AED").slice(1),16)||0x7c3aed,fields:[{name:"Produto",value:variant?.name||"Escolha uma opção",inline:true},{name:"Total",value:variant?money(variant.price_cents):"A definir",inline:true},{name:"Entrega digital",value:"Após confirmação do pagamento."}],...(p.image_url?{thumbnail:{url:p.image_url}}:{}),footer:{text:"01 • Carrinho  →  02 • Pagamento  →  03 • Entrega"}});
  const controls=variant=>[{type:1,components:[{type:2,style:3,label:"Comprar",emoji:{name:"🛒"},custom_id:"checkout:"+variant.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}];
  const publish=async(embed,components=[],payload=null)=>{
-  let body={embeds:[embed],components,allowed_mentions:{parse:[]}};
+  let body={embeds:[embed],components,allowed_mentions:{parse:[]},...(opening?{content:"<@"+buyer+">, seu carrinho foi criado!",allowed_mentions:{parse:[],users:[buyer]}}:{})};
   if(payload){const form=new FormData();body.attachments=[{id:0,filename:"pix.gif"}];body.embeds[0].image={url:"attachment://pix.gif"};form.append("payload_json",JSON.stringify(body));form.append("files[0]",new Blob([qrGif(payload)],{type:"image/gif"}),"pix.gif");body=form;}
   const response=await call("/channels/"+privateChannel+"/messages","POST",body);
   return response.ok?reply("Carrinho: <#"+privateChannel+">"):reply("Não foi possível enviar a mensagem ao carrinho.");
@@ -118,8 +115,8 @@ export async function cart(interaction,env){
    ]);
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Abra o aplicativo do seu banco e confira o nome do destinatário e o valor antes de pagar.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Titular",value:pix.recipient,inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:"`"+(payload||pix.pix_key)+"`"},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
-   return publish(paymentEmbed,[{type:1,components:[{type:2,style:3,label:"Confirmar venda",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
+   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:"`"+(payload||pix.pix_key)+"`"},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
+   return publish(paymentEmbed,[{type:1,components:[{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");
  }

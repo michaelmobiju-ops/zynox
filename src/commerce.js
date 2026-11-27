@@ -1,3 +1,4 @@
+import {inventorySQL,announcement,refreshAnnouncement} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
@@ -72,7 +73,7 @@ export async function commerce(request,env,storeChannels){
  const rows=await list("SELECT p.id AS product_id,p.name AS product_name,v.id AS variant_id,v.name AS variant_name,v.infinite_stock,COUNT(CASE WHEN s.status='available' THEN 1 END) AS available,COUNT(CASE WHEN s.status='reserved' THEN 1 END) AS reserved,COUNT(CASE WHEN s.status='used' THEN 1 END) AS used FROM products p JOIN variants v ON v.product_id=p.id LEFT JOIN stock s ON s.variant_id=v.id WHERE p.store_id=? AND p.status!='archived' GROUP BY p.id,v.id ORDER BY p.name,v.name",store.id);
  return json({variants:rows.map(row=>({...row,low_stock:!row.infinite_stock&&row.available<=5,out_of_stock:row.available===0})),low_stock_threshold:5});
  }
- if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
+ if(path==="/api/commerce/products"&&request.method==="GET")return json({products:await list("SELECT * FROM products WHERE store_id=? AND status!='archived' ORDER BY created_at DESC",store.id),variants:await list("SELECT v.*,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status='available') AS available,(SELECT count(*) FROM stock s WHERE s.variant_id=v.id AND s.status IN ('available','reserved') AND NOT EXISTS(SELECT 1 FROM order_stock os JOIN orders o ON o.id=os.order_id WHERE os.stock_id=s.id AND o.status IN ('paid','delivering','delivered') AND v.infinite_stock=0)) AS on_hand FROM variants v JOIN products p ON p.id=v.product_id WHERE p.store_id=?",store.id)});
  if(path==="/api/commerce/products"&&request.method==="POST"){
   const name=String(body.name||"").trim(),description=String(body.description||""),image=String(body.image_url||""),color=String(body.color||"#7135FF"),button=String(body.button_text||"Comprar"),channel=String(body.channel_id||"");
   const variants=body.variants;
@@ -190,11 +191,8 @@ export async function commerce(request,env,storeChannels){
   if(!p)return fail("Produto não encontrado.",404);
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
-  const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
-  const options=await list("SELECT id,name,price_cents FROM variants WHERE product_id=? ORDER BY name,id",p.id);
-  const price=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
-  const components=p.has_variations&&options.length>1?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}];
-  const payload={embeds:[embed],allowed_mentions:{parse:[]},components};
+  const options=await list(inventorySQL,p.id);
+  const payload=announcement(p,options);
   const locked=await env.DB.prepare("UPDATE products SET status='publishing' WHERE id=? AND store_id=? AND status IN ('draft','active')").bind(p.id,store.id).run();
   if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
   let response;
@@ -246,7 +244,8 @@ export async function commerce(request,env,storeChannels){
    env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
   ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
   if(!result[0].meta.changes)return fail("Pedido já processado.",409);
-  try{await announceSale(env,id);}catch{}
+  try{await refreshAnnouncement(env,id);}catch{}
+   try{await announceSale(env,id);}catch{}
   let delivery="pending";try{delivery=await deliver(env,id);}catch{}
   return json({success:true,status:delivery==="delivered"?"delivered":"paid",delivery});
  }

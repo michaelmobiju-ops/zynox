@@ -1,3 +1,4 @@
+import {refreshAnnouncement} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {announceSale} from "./sale-notifications.js";
 const hex=s=>Uint8Array.from(String(s).match(/../g)||[],x=>parseInt(x,16));
@@ -78,6 +79,7 @@ export async function paymentWebhook(request,env){
   env.DB.prepare("UPDATE payments SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.id),
   env.DB.prepare("UPDATE orders SET status='paid',paid_at=COALESCE(paid_at,datetime('now')) WHERE id=? AND status='pending'").bind(row.order_id)
  ]);
+ try{await refreshAnnouncement(env,row.order_id);}catch{}
  try{await announceSale(env,row.order_id);}catch{}
  await deliver(env,row.order_id);
  return json({received:true});
