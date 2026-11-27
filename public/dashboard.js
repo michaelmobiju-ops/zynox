@@ -866,7 +866,7 @@ async function loadHomeDashboard() {
 
 function navigate(page) {
   if (!pageNames[page]) return;
-  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications"].includes(page)) page="servers";
+  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications","bot"].includes(page)) page="servers";
 
   if (page === "stock") page="products";
   if (page === "automations") page="integrations";
@@ -1287,10 +1287,10 @@ function navigate(page) {
     const head=node("div",undefined,"server-entry-head");
     head.append(node("span","✦ ZYNOX / GERENCIAMENTO","server-eyebrow"),node("h1","Seus servidores"),node("p","Selecione onde deseja gerenciar suas vendas, produtos e automações."));
     const actions=node("div",undefined,"server-entry-actions");
-    const invite=node("a","+ Adicionar bot ao Discord","control-button");
+    const invite=node("a","Usar bot oficial da ZYNOX","control-button");
     invite.href="https://discord.com/oauth2/authorize?client_id=1575192990132076637&permissions=85008&scope=bot%20applications.commands";
     invite.target="_blank";invite.rel="noopener noreferrer";
-    const refresh=button("Atualizar",()=>load());actions.append(invite,refresh);
+    const refresh=button("Atualizar",()=>load());actions.append(invite,button("Conectar meu próprio bot",()=>navigate("bot")),refresh);
     const notice=node("p",undefined,"server-entry-notice"),list=node("div",undefined,"server-grid");
     const foot=node("div",undefined,"server-entry-footer");
     foot.append(button("Minha conta",()=>navigate("account")));
@@ -1323,7 +1323,7 @@ function navigate(page) {
       }
       if(!data.stores.some(s=>!s.removed_at)){
         const empty=node("div",undefined,"server-empty");
-        empty.append(node("h2","Nenhum servidor conectado"),node("p","Adicione a ZYNOX ao seu Discord e vincule o servidor para começar."));
+        empty.append(node("h2","Nenhum servidor conectado"),node("p","Escolha o bot oficial da ZYNOX ou conecte seu próprio bot para começar."));
         list.append(empty);
       }
       try{
@@ -1364,7 +1364,7 @@ function navigate(page) {
     const direct=panel("Conectar um novo servidor","Use seu próprio bot, sem instalar o bot oficial da ZYNOX.");
     const guildInput=input("ID do servidor Discord");
     const directToken=input("Token do bot");directToken.type="password";directToken.autocomplete="off";
-    direct.append(node("p","Ative o modo desenvolvedor no Discord, copie o ID do servidor e instale seu bot nele antes de continuar."),field("ID do servidor",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
+    direct.append(button("Voltar aos servidores",()=>navigate("servers")),node("p","Ative o modo desenvolvedor no Discord, copie o ID do servidor e instale seu bot nele antes de continuar."),field("ID do servidor",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
       try{await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});toast("Servidor vinculado.",true);navigate("bot");}finally{directToken.value="";}
     }));
     if(!ZYNOX.user.discord_id)direct.append(button("Vincular minha conta Discord",()=>location.href="/auth/discord/link"));
