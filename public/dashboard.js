@@ -7,7 +7,8 @@ const ZYNOX = {
 const pageNames = {
   home: "Início",
   dashboard: "Dashboard",
-  bot: "Meu bot",
+  bot: "Conectar bot",
+  "bot-settings": "Configurar bot",
   servers: "Servidores",
   products: "Produtos",
   sales: "Vendas",
@@ -866,7 +867,7 @@ async function loadHomeDashboard() {
 
 function navigate(page) {
   if (!pageNames[page]) return;
-  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications","bot"].includes(page)) page="servers";
+  if (!ZYNOX.store && !["home","dashboard","servers","control","account","plans","licenses","support","notifications","bot","bot-settings"].includes(page)) page="servers";
 
   if (page === "stock") page="products";
   if (page === "automations") page="integrations";
@@ -1341,8 +1342,9 @@ function navigate(page) {
     load();return;
   }
 
-  if (page === "bot") {
-    const box=panel("Meu bot","Conecte o bot que você criou no Discord Developer e personalize seu perfil.");
+  if (page === "bot" || page === "bot-settings") {
+    const configuring=page==="bot-settings";
+    const box=panel("Configurar bot","Gerencie a identidade e a conexão do seu bot personalizado.");
     box.classList.add("zynox-bot-panel");
     const hero=node("div",undefined,"zynox-bot-hero");
     const symbol=node("img");symbol.src="/zynox-logo.svg";symbol.alt="ZYNOX";symbol.width=84;symbol.height=84;
@@ -1355,12 +1357,13 @@ function navigate(page) {
     const token=input("Cole o token do seu bot");token.type="password";token.autocomplete="off";
     const connection=node("p","Selecione um servidor para verificar a conexão.");
     const profile=node("div");
-    box.append(info,guide,field("Servidor",storeSelect),field("Token do bot",token),button("Conectar meu bot",async()=>{
+    const connectExisting=button("Conectar meu bot",async()=>{
       if(!storeSelect.value)throw Error("Selecione o servidor.");
       if(!token.value.trim())throw Error("Informe o token do bot.");
       await api("/api/custom-bot/connect",{store_id:storeSelect.value,token:token.value.trim()});
       token.value="";await refresh();toast("Token validado e protegido.",true);
-    }),connection,profile);
+    });
+    box.append(field("Servidor",storeSelect),connection,button("Atualizar status",()=>refresh()),profile);
     const direct=panel("Conectar meu próprio bot","Selecione seu servidor Discord e informe o token do bot.");
     const guildInput=input("ID do servidor (opcional)");
     const discovered=select([["","Carregando servidores..."]]);
@@ -1377,11 +1380,12 @@ function navigate(page) {
           discoveryStatus.textContent="Token válido. Adicione seu bot ao servidor pelo botão abaixo e depois tente conectar novamente.";
           return;
         }
-        installLink.hidden=true;toast("Servidor vinculado.",true);navigate("bot");
+        installLink.hidden=true;toast("Servidor vinculado.",true);navigate("bot-settings");
       }finally{directToken.value="";}
     }));
-    main.append(direct,box);
-    api("/api/discord/my-guilds").then(result=>{
+    if(!configuring){main.append(direct);direct.append(button("Configurar bot conectado",()=>navigate("bot-settings")));}
+    else{main.append(box);box.append(button("Conectar outro bot",()=>navigate("bot")));}
+    if(!configuring)api("/api/discord/my-guilds").then(result=>{
       discovered.replaceChildren(new Option("Selecione o servidor",""),...result.servers.map(g=>new Option(g.name,g.id)));
       authorize.hidden=!result.needsAuthorization;
       discoveryStatus.textContent=result.needsAuthorization?"Autorize o acesso à lista de servidores uma vez.":result.servers.length?"Escolha um servidor que você administra.":"Nenhum servidor com permissão de gerenciamento encontrado.";
@@ -1391,7 +1395,7 @@ function navigate(page) {
       if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}
       const result=await api("/api/custom-bot/status?store="+encodeURIComponent(storeSelect.value));
       connection.textContent=result.connected?"Bot conectado: "+result.bot.name+" · Gateway: "+({online:"Online",connecting:"Conectando",offline:"Offline",unavailable:"Indisponível"}[result.gateway?.state]||"Não verificado")+" · Aplicação "+result.bot.application_id:"Nenhum bot próprio conectado a este servidor.";
-      if(!result.connected)return;
+      if(!result.connected){profile.append(info,field("Token do bot",token),connectExisting);return;}
       const note=node("p","O token fica criptografado no servidor. Para receber interações do Discord, configure o endereço abaixo no Discord Developer. A integração completa de vendas com bots próprios ainda está em desenvolvimento.");
       const endpoint=input("URL de interações");endpoint.value=result.bot.interactions_url;endpoint.readOnly=true;
       profile.append(node("h3","Personalização do perfil"),note,field("Interactions Endpoint URL",endpoint),button("Copiar URL",()=>navigator.clipboard.writeText(endpoint.value)));
@@ -1409,12 +1413,12 @@ function navigate(page) {
       profile.append(field("Apelido do bot",nickname),button("Salvar apelido",async()=>{await api("/api/commerce/bot-nickname",{store_id:storeSelect.value,nickname:nickname.value});toast("Apelido atualizado.",true);}));
     }
     storeSelect.addEventListener("change",()=>refresh().catch(e=>connection.textContent=e.message));
-    api("/api/dashboard/summary?store=").then(data=>{
+    if(configuring)api("/api/dashboard/summary?store=").then(data=>{
       const stores=data.stores||[];
       storeSelect.replaceChildren(...stores.map(st=>{const o=node("option",st.name);o.value=st.id;return o;}));
       if(ZYNOX.store&&stores.some(st=>st.id===ZYNOX.store.id))storeSelect.value=ZYNOX.store.id;
-      box.hidden=!stores.length;
       if(stores.length)refresh().catch(e=>connection.textContent=e.message);
+      else connection.textContent="Nenhum servidor vinculado. Use Conectar outro bot para começar.";
     }).catch(e=>connection.textContent="Não foi possível carregar servidores: "+e.message);
     return;
   }
