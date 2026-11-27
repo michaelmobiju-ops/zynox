@@ -1,3 +1,4 @@
+import {botTokenForStore} from "./custom-bots.js";
 import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
 import {announceSale} from "./sale-notifications.js";
@@ -29,9 +30,10 @@ export async function commerce(request,env,storeChannels){
  if(path==="/api/commerce/bot-nickname"&&request.method==="POST"){
   const nickname=String(body.nickname||"").trim();
   if(!nickname||nickname.length>32)return fail("Informe um apelido de até 32 caracteres.");
-  if(!env.DISCORD_BOT_TOKEN)return fail("Bot Discord não configurado.",503);
-  const response=await fetch("https://discord.com/api/v10/guilds/"+encodeURIComponent(store.guild_id)+"/members/@me",{method:"PATCH",headers:{Authorization:"Bot "+env.DISCORD_BOT_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({nick:nickname}),signal:AbortSignal.timeout(8000)});
-  if(!response.ok)return fail("Não foi possível mudar o apelido. Confira as permissões do bot.",502);
+  const token=await botTokenForStore(env,store.id);
+  if(!token)return fail("Nenhum bot conectado a esta loja.",503);
+  const response=await fetch("https://discord.com/api/v10/guilds/"+encodeURIComponent(store.guild_id)+"/members/@me",{method:"PATCH",headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},body:JSON.stringify({nick:nickname}),signal:AbortSignal.timeout(8000)});
+  if(!response.ok)return fail("Não foi possível mudar o apelido. Confira se o bot está no servidor e possui permissão para alterar o próprio apelido (HTTP "+response.status+").",502);
   return json({success:true,nickname});
  }
  if(path==="/api/commerce/settings"&&request.method==="GET")return json({store:{id:store.id,name:store.name,guild_id:store.guild_id}});
