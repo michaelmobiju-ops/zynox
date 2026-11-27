@@ -1390,7 +1390,7 @@ function navigate(page) {
       profile.replaceChildren();
       if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}
       const result=await api("/api/custom-bot/status?store="+encodeURIComponent(storeSelect.value));
-      connection.textContent=result.connected?"Bot conectado: "+result.bot.name+" · Aplicação "+result.bot.application_id:"Nenhum bot próprio conectado a este servidor.";
+      connection.textContent=result.connected?"Bot conectado: "+result.bot.name+" · Gateway: "+({online:"Online",connecting:"Conectando",offline:"Offline",unavailable:"Indisponível"}[result.gateway?.state]||"Não verificado")+" · Aplicação "+result.bot.application_id:"Nenhum bot próprio conectado a este servidor.";
       if(!result.connected)return;
       const note=node("p","O token fica criptografado no servidor. Para receber interações do Discord, configure o endereço abaixo no Discord Developer. A integração completa de vendas com bots próprios ainda está em desenvolvimento.");
       const endpoint=input("URL de interações");endpoint.value=result.bot.interactions_url;endpoint.readOnly=true;

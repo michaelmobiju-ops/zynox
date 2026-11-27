@@ -30,6 +30,14 @@ namespace_id = "1001"
 limit = 5
 period = 60
 
+[[durable_objects.bindings]]
+name = "BOT_GATEWAY"
+class_name = "BotGateway"
+
+[[migrations]]
+tag = "gateway-v1"
+new_sqlite_classes = ["BotGateway"]
+
 [previews.vars]
 APP_NAME = "ZYNOX Preview"
 APP_ENV = "preview"
@@ -47,3 +55,7 @@ namespace_id = "1002"
 [previews.ratelimits.simple]
 limit = 5
 period = 60
+
+[[previews.durable_objects.bindings]]
+name = "BOT_GATEWAY"
+class_name = "BotGateway"

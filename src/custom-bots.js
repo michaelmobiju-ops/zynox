@@ -1,3 +1,4 @@
+import {startGateway} from "./bot-gateway.js";
 import {getSession} from "./auth.js";
 const respond=(value,status=200)=>Response.json(value,{status,headers:{"Cache-Control":"no-store"}});
 const fail=(message,status=400)=>respond({error:message},status);
@@ -86,13 +87,14 @@ export async function customBots(request,env){
   }catch{return fail("Não foi possível vincular. Verifique se o bot ou servidor já está em uso.",409);}
   const linked=await env.DB.prepare("SELECT c.application_id FROM custom_bots c JOIN stores s ON s.id=c.store_id WHERE s.id=? AND s.owner_id=?").bind(storeId,user.id).first();
   if(linked?.application_id!==app.data.id)return fail("Já existe outro bot conectado.",409);
-  return respond({success:true,store_id:storeId,interactions_url:url.origin+"/discord/interactions/"+app.data.id});
+  const gateway=await startGateway(env,storeId);
+  return respond({success:true,gateway,store_id:storeId,interactions_url:url.origin+"/discord/interactions/"+app.data.id});
  }
  const storeId=String(body.store_id||url.searchParams.get("store")||"");
  const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
  if(!store)return fail("Servidor não encontrado ou sem permissão.",404);
  const current=await env.DB.prepare("SELECT store_id,application_id,bot_user_id,bot_name,public_key,token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();
- if(request.method==="GET")return respond({connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions/"+current.application_id}:null});
+ if(request.method==="GET"){const gateway=current?await startGateway(env,storeId):{state:"offline"};return respond({gateway,connected:!!current,bot:current?{application_id:current.application_id,bot_user_id:current.bot_user_id,name:current.bot_name,interactions_url:url.origin+"/discord/interactions/"+current.application_id}:null});}
  if(url.pathname==="/api/custom-bot/connect"){
   const token=String(body.token||"").trim();
   if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Token do bot inválido.");
@@ -109,7 +111,8 @@ export async function customBots(request,env){
   if(existing)return fail("Este bot já está conectado a outra loja.",409);
   const cipher=await seal(env,token);
   await env.DB.prepare("INSERT INTO custom_bots(store_id,application_id,bot_user_id,public_key,token_cipher,bot_name) VALUES(?,?,?,?,?,?) ON CONFLICT(store_id) DO UPDATE SET token_cipher=excluded.token_cipher,public_key=excluded.public_key,bot_name=excluded.bot_name,updated_at=CURRENT_TIMESTAMP").bind(storeId,app.data.id,identity.data.id,app.data.verify_key,cipher,identity.data.username||"Bot").run();
-  return respond({connected:true,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions/"+app.data.id});
+  const gateway=await startGateway(env,storeId);
+  return respond({connected:true,gateway,bot:{application_id:app.data.id,name:identity.data.username},interactions_url:url.origin+"/discord/interactions/"+app.data.id});
  }
  if(url.pathname==="/api/custom-bot/profile"){
   if(!current)return fail("Conecte seu bot primeiro.",409);

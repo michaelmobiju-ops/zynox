@@ -1,3 +1,4 @@
+export {BotGateway} from "./bot-gateway.js";
 import {shield} from "./shield.js";
 import {ownerMetrics,monitor} from "./operations.js";
 import {publicApi} from "./public-api.js";
