@@ -24,7 +24,9 @@ async function discord(token,path,options={}){
  const data=await response.json().catch(()=>({}));
  return {ok:response.ok,status:response.status,data};
 }
-export async function customBots(request,env){
+export async function customBots(request,env,ctx){
+ const namespace=ctx?.exports?.BotGateway;
+ if(namespace)env=Object.assign(Object.create(env),{BOT_GATEWAY:namespace});
  const url=new URL(request.url);
  const user=await getSession(request,env);
  if(!user)return fail("Autenticação necessária.",401);

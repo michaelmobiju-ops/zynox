@@ -1,6 +1,7 @@
 name = "zynox"
 main = "src/index.js"
 compatibility_date = "2026-11-25"
+compatibility_flags = ["enable_ctx_exports"]
 workers_dev = true
 
 [assets]

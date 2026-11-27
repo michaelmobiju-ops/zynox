@@ -1,4 +1,10 @@
-export {BotGateway} from "./bot-gateway.js";
+import {DurableObject} from "cloudflare:workers";
+import {BotGateway as GatewayController} from "./bot-gateway.js";
+export class BotGateway extends DurableObject {
+  constructor(ctx,env){super(ctx,env);this.controller=new GatewayController(ctx,env);}
+  fetch(request){return this.controller.fetch(request);}
+  alarm(){return this.controller.alarm();}
+}
 import {shield} from "./shield.js";
 import {ownerMetrics,monitor} from "./operations.js";
 import {publicApi} from "./public-api.js";
@@ -544,7 +550,7 @@ export default {
         await env.SALE_IMAGES.put(key,bytes,{httpMetadata:{contentType:type},customMetadata:{storeId}});
         return json({url:url.origin+"/media/sales/"+key});
       }
-      if (path.startsWith("/api/custom-bot/")) return customBots(request,env);
+      if (path.startsWith("/api/custom-bot/")) return customBots(request,env,ctx);
       if (path === "/api/store/channels") return storeChannels(request,env);
       if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
 
