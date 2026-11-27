@@ -1,13 +1,31 @@
+import {botIdentityForStore} from "./custom-bots.js";
 export async function cart(interaction,env){
  const reply=(content,components=[])=>({type:4,data:{content,components,flags:64,allowed_mentions:{parse:[]}}});
  const custom=interaction.data?.custom_id||"";
- const action=["buy:","choose:","checkout:"].find(x=>custom.startsWith(x));
+ let action=["buy:","choose:","checkout:"].find(x=>custom.startsWith(x));
  if(!action)return null;
- const ref=custom.slice(action.length);
+ let ref=custom.slice(action.length);
  const variantRef=action==="checkout:"?await env.DB.prepare("SELECT product_id FROM variants WHERE id=?").bind(ref).first():null;
  const productId=variantRef?.product_id||ref;
  const p=await env.DB.prepare("SELECT p.*,s.guild_id FROM products p JOIN stores s ON s.id=p.store_id WHERE p.id=? AND p.status='active'").bind(productId).first();
- if(!p||p.guild_id!==interaction.guild_id||p.channel_id!==interaction.channel_id||(action==="buy:"&&p.message_id!==interaction.message?.id))return reply("Produto indisponível.");
+ if(!p||p.guild_id!==interaction.guild_id||(action==="buy:"&&(p.channel_id!==interaction.channel_id||p.message_id!==interaction.message?.id)))return reply("Produto indisponível.");
+ const buyer=interaction.member?.user?.id||interaction.user?.id;
+ if(!buyer)return reply("Não foi possível identificar o comprador.");
+ const bot=await botIdentityForStore(env,p.store_id);
+ if(!bot.token||String(bot.id)!==String(interaction.application_id))return reply("Bot da loja indisponível.");
+ const call=(path,method="GET",body)=>fetch("https://discord.com/api/v10"+path,{method,headers:{Authorization:"Bot "+bot.token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(8000)});
+ const topic="ZYNOX_CART:"+p.id+":"+buyer;
+ let privateChannel=null;
+ if(action!=="buy:"){
+  const res=await call("/channels/"+interaction.channel_id);
+  if(!res.ok)return reply("Carrinho não encontrado.");
+  const channel=await res.json();
+  if(channel.guild_id!==p.guild_id||channel.topic!==topic||channel.type!==0)return reply("Este carrinho não pertence a você.");
+  const overwrites=channel.permission_overwrites||[];
+  if(!overwrites.some(o=>o.id===p.guild_id&&o.type===0&&(BigInt(o.deny)&1024n)!==0n)||overwrites.some(o=>o.id!==buyer&&o.id!==bot.id&&o.id!==p.guild_id&&(BigInt(o.allow)&1024n)!==0n))return reply("As permissões do carrinho foram alteradas.");
+  privateChannel=channel.id;
+ }
+
  await env.DB.batch([
   env.DB.prepare("UPDATE orders SET status='expired' WHERE store_id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id) AND NOT EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=orders.id AND status IN ('pending','confirmed')) AND datetime(created_at,'+10 minutes')<=datetime('now')").bind(p.store_id),
   env.DB.prepare("UPDATE stock SET status='available',reserved_until=NULL WHERE status='reserved' AND reserved_until<=datetime('now') AND variant_id IN (SELECT id FROM variants WHERE product_id=?) AND NOT EXISTS(SELECT 1 FROM order_stock os JOIN orders o ON o.id=os.order_id WHERE os.stock_id=stock.id AND o.status IN ('pending','paid'))").bind(productId)
@@ -15,6 +33,23 @@ export async function cart(interaction,env){
  const variants=(await env.DB.prepare("SELECT v.*,(SELECT count(*) FROM stock WHERE variant_id=v.id AND status='available') AS available FROM variants v WHERE product_id=?").bind(productId).all()).results;
  const available=variants.filter(v=>v.available>0);
  if(!available.length)return reply("Produto sem estoque.");
+ const money=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
+ const publish=async(content,components=[])=>{
+  const response=await call("/channels/"+privateChannel+"/messages","POST",{content,components,allowed_mentions:{parse:[]}});
+  return response.ok?reply("Confira seu carrinho: <#"+privateChannel+">"):reply("Não foi possível enviar a mensagem ao carrinho. Confira as permissões do bot.");
+ };
+ if(action==="buy:"){
+  const channels=await call("/guilds/"+p.guild_id+"/channels");
+  if(!channels.ok)return reply("Não foi possível consultar os canais de compra.");
+  const existing=(await channels.json()).find(ch=>ch.type===0&&ch.topic===topic&&ch.permission_overwrites?.some(o=>o.id===p.guild_id&&o.type===0&&(BigInt(o.deny)&1024n)!==0n)&&!ch.permission_overwrites.some(o=>o.id!==buyer&&o.id!==bot.id&&o.id!==p.guild_id&&(BigInt(o.allow)&1024n)!==0n));
+  if(existing)return reply("Seu carrinho já está aberto: <#"+existing.id+">");
+  const created=await call("/guilds/"+p.guild_id+"/channels","POST",{name:"carrinho-"+buyer.slice(-8),type:0,topic,permission_overwrites:[{id:p.guild_id,type:0,deny:"1024",allow:"0"},{id:buyer,type:1,allow:"68608",deny:"0"},{id:bot.id,type:1,allow:"68608",deny:"0"}]});
+  if(!created.ok)return reply("Não foi possível criar o carrinho privado. O bot precisa de Gerenciar Canais (HTTP "+created.status+").");
+  privateChannel=(await created.json()).id;
+  if(variants.length===1){action="checkout:";ref=available[0].id;}
+  else return publish("**Carrinho de compras** — "+p.name,[{type:1,components:[{type:3,custom_id:"choose:"+p.id,placeholder:"Selecione a variação",options:available.slice(0,25).map(v=>({label:v.name,value:v.id,description:money(v.price_cents)}))}]}]);
+ }
+ if(action==="choose:"){action="checkout:";ref=String(interaction.data?.values?.[0]||"");}
  if(action==="checkout:"){
   const v=available.find(v=>v.id===ref);
   if(!v)return reply("Variação indisponível.");
@@ -39,14 +74,9 @@ export async function cart(interaction,env){
    ]);
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   return reply("Pix manual — "+p.name+" / "+v.name+"\nValor: R$ "+(order.total_cents/100).toFixed(2)+"\nTitular: "+pix.recipient+"\nTipo: "+pix.key_type+"\nChave Pix: "+pix.pix_key+"\nPedido: "+orderId+"\nConfira o titular no aplicativo do banco. A entrega depende da confirmação do vendedor no extrato.");
+   return publish("Pix manual — "+p.name+" / "+v.name+"\nValor: R$ "+(order.total_cents/100).toFixed(2)+"\nTitular: "+pix.recipient+"\nTipo: "+pix.key_type+"\nChave Pix: "+pix.pix_key+"\nPedido: "+orderId+"\nConfira o titular no aplicativo do banco. A entrega depende da confirmação do vendedor no extrato.");
   }
-  return reply("Reserva criada por 10 minutos.\n"+p.name+" — "+v.name+"\nTotal: R$ "+(v.price_cents/100).toFixed(2)+"\nPedido: "+orderId+"\nPix ainda não configurado.");
+  return publish("**Pedido criado**\n"+p.name+" — "+v.name+"\nTotal: "+money(v.price_cents)+"\nPedido: "+orderId+"\nPix ainda não configurado. Nenhum pagamento foi solicitado.");
  }
- if(action==="choose:"){
-  const v=available.find(v=>v.id===interaction.data?.values?.[0]);
-  if(!v)return reply("Variação indisponível.");
-  return reply("Selecionado: "+p.name+" — "+v.name+"\nTotal: R$ "+(v.price_cents/100).toFixed(2),[{type:1,components:[{type:2,style:3,label:"Reservar por 10 minutos",custom_id:"checkout:"+v.id}]}]);
- }
- return reply("Carrinho privado — "+p.name+"\n"+available.map(v=>v.name+" — R$ "+(v.price_cents/100).toFixed(2)).join("\n"),[{type:1,components:[{type:3,custom_id:"choose:"+p.id,placeholder:"Selecione a variação",options:available.slice(0,25).map(v=>({label:v.name,value:v.id,description:"R$ "+(v.price_cents/100).toFixed(2)}))}]}]);
+ return reply("Interação indisponível.");
 }
