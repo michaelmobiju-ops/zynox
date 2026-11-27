@@ -1,3 +1,4 @@
+import {checkoutBrand,receipt} from "./checkout-brand.js";
 import {refreshAnnouncement} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {announceSale} from "./sale-notifications.js";
@@ -24,11 +25,12 @@ export async function deliver(env,orderId){
  if(!lock.meta.changes)return "pending";
  const release=()=>env.DB.prepare("UPDATE orders SET status='paid' WHERE id=? AND status='delivering'").bind(orderId).run();
  const headers={Authorization:"Bot "+botToken,"Content-Type":"application/json"};
+ const brand=await checkoutBrand(env,order.store_id);
  try{
   const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers,body:JSON.stringify({recipient_id:order.discord_id}),signal:AbortSignal.timeout(8000)});
   if(!dm.ok){await release();return "pending";}
   const channel=await dm.json();
-  const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers,body:JSON.stringify({content:"Pagamento confirmado!\nProduto: "+order.product_name+" — "+order.variant_name+"\nSua key: "+value,nonce,enforce_nonce:true,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
+  const sent=await fetch("https://discord.com/api/v10/channels/"+channel.id+"/messages",{method:"POST",headers,body:JSON.stringify({content:"Sua key:\n"+value,embeds:[receipt(order,brand)],nonce,enforce_nonce:true,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(8000)});
   if(!sent.ok){if(sent.status<500)await release();return "pending";}
   const batch=[];
   if(!order.infinite_stock)batch.push(env.DB.prepare("UPDATE stock SET status='sold',reserved_until=NULL WHERE id=? AND status='reserved'").bind(item.id));

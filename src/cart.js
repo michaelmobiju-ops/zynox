@@ -1,3 +1,4 @@
+import {checkoutBrand} from "./checkout-brand.js";
 import {confirmManual,releaseLegacyManual} from "./manual-stock.js";
 import {refreshAnnouncement} from "./product-announcement.js";
 import {botIdentityForStore} from "./custom-bots.js";
@@ -72,8 +73,9 @@ export async function cart(interaction,env){
  const variants=(await env.DB.prepare("SELECT v.*,(SELECT count(*) FROM stock WHERE variant_id=v.id AND status='available') AS available FROM variants v WHERE product_id=?").bind(productId).all()).results;
  const available=variants.filter(v=>v.available>0);
  if(!available.length)return reply("Produto sem estoque.");
+ const brand=await checkoutBrand(env,p.store_id);
  const money=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
- const cartEmbed=variant=>({author:{name:"CHECKOUT • COMPRA PRIVADA"},title:"🛒 "+p.name,description:String(p.description||"Produto digital").slice(0,4000),color:parseInt(String(p.color||"#7C3AED").slice(1),16)||0x7c3aed,fields:[{name:"Produto",value:variant?.name||"Escolha uma opção",inline:true},{name:"Total",value:variant?money(variant.price_cents):"A definir",inline:true},{name:"Entrega digital",value:"Após confirmação do pagamento."}],...(p.image_url?{thumbnail:{url:p.image_url}}:{}),footer:{text:"01 • Carrinho  →  02 • Pagamento  →  03 • Entrega"}});
+ const cartEmbed=variant=>({author:{name:brand.name+" • COMPRA PRIVADA"},title:"🛒 "+p.name,description:String(p.description||"Produto digital").slice(0,4000),color:brand.color??(parseInt(String(p.color||"#7C3AED").slice(1),16)||0x7c3aed),fields:[{name:"Produto",value:variant?.name||"Escolha uma opção",inline:true},{name:"Total",value:variant?money(variant.price_cents):"A definir",inline:true},{name:"Entrega digital",value:"Após confirmação do pagamento."}],...(p.image_url?{thumbnail:{url:p.image_url}}:{}),footer:{text:"01 • Carrinho  →  02 • Pagamento  →  03 • Entrega"}});
  const controls=variant=>[{type:1,components:[{type:2,style:3,label:"Comprar",emoji:{name:"🛒"},custom_id:"checkout:"+variant.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}];
  const publish=async(embed,components=[],payload=null)=>{
   let body={embeds:[embed],components,allowed_mentions:{parse:[]},...(opening?{content:"<@"+buyer+">, seu carrinho foi criado!",allowed_mentions:{parse:[],users:[buyer]}}:{})};
@@ -121,7 +123,7 @@ export async function cart(interaction,env){
   if(pix){
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v5":"Pix por chave • QR indisponível sem cidade cadastrada • v5"}};
+   const paymentEmbed={author:{name:brand.name+" • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v5":"Pix por chave • QR indisponível sem cidade cadastrada • v5"}};
    return publish(paymentEmbed,[{type:1,components:[{type:2,style:1,label:"Copiar Pix",emoji:{name:"📋"},custom_id:"copy-pix:"+p.id},{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");

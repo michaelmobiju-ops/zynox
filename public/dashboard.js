@@ -1171,7 +1171,14 @@ function navigate(page) {
       if(page==="sales"||page==="reports"){
         const m=d.stats;
         list.append(metrics([["Valor bruto confirmado",money(m.sales_cents)],["Pedidos",m.orders],["Pagos ou entregues",m.paid],["Pendentes",m.pending],["Entregues",m.delivered],["Clientes",m.customers]]));
-        if(page==="reports"){list.append(node("p","Ticket médio confirmado: "+money(m.paid?m.sales_cents/m.paid:0)),node("p","Indicadores acumulados. Incluem vendas de teste, quando existentes; não representam saldo bancário nem lucro líquido."));return;}
+        if(page==="reports"){
+ const period=select([["7","7 dias"],["30","30 dias"],["90","90 dias"]]),body=node("div");period.value="30";
+ list.append(node("p","Ticket médio acumulado: "+money(m.paid?m.sales_cents/m.paid:0)),field("Período dos relatórios",period),body);
+ let reportVersion=0;async function renderReport(){const version=++reportVersion;body.replaceChildren(node("p","Carregando relatório..."));const r=await api("/api/commerce/analytics?store="+encodeURIComponent(id)+"&days="+period.value);if(version!==reportVersion||!body.isConnected)return;body.replaceChildren();
+ const sum=r.daily.reduce((n,x)=>n+Number(x.cents),0);body.append(metrics([["Receita bruta no período",money(sum)],["Pedidos pagos",r.daily.reduce((n,x)=>n+Number(x.orders),0)]]));
+ body.append(node("h3","Faturamento diário (UTC)"));const chart=node("div",undefined,"sales-bars"),max=Math.max(1,...r.daily.map(x=>x.cents));for(const x of r.daily){const line=node("div",undefined,"sales-bar-row"),track=node("div",undefined,"sales-bar-track"),bar=node("div",undefined,"sales-bar-fill");bar.style.width=(100*x.cents/max)+"%";track.append(bar);line.append(node("span",x.day.slice(5)),track,node("strong",money(x.cents)));chart.append(line);}body.append(chart);if(!r.daily.length)body.append(node("p","Nenhuma venda confirmada no período."));
+ body.append(node("h3","Produtos mais vendidos"));for(const x of r.products)body.append(card(x.name,x.quantity+" unidades",money(x.cents)));body.append(node("h3","Ranking de compradores"));for(const x of r.buyers)body.append(card(x.username||x.discord_id,x.orders+" compras",money(x.cents)));body.append(node("h3","Estoque baixo"));for(const x of r.low)body.append(card(x.product+" • "+x.variant,x.quantity+" unidades disponíveis"));if(!r.low.length)body.append(node("p","Nenhum alerta de estoque finito."));body.append(node("p","Valores brutos confirmados; não representam lucro líquido ou saldo bancário."));
+ }period.addEventListener("change",()=>renderReport().catch(e=>toast(e.message)));await renderReport();return;}
         const filter=select([["","Todos os status"],["pending","Pendentes"],["paid","Pagos"],["delivered","Entregues"],["cancelled","Cancelados"],["expired","Expirados"]]),search=input("Buscar produto, cliente ou pedido"),results=node("div");
         const render=()=>{results.replaceChildren();const q=search.value.trim().toLowerCase();const items=d.orders.filter(o=>(!filter.value||o.status===filter.value)&&(!q||[o.id,o.username,o.product_name,o.variant_name].some(x=>String(x||"").toLowerCase().includes(q))));for(const o of items)results.append(card(o.product_name||"Pedido",o.variant_name||"Padrão","Cliente: "+(o.username||"—"),"Valor: "+money(o.total_cents),"Status: "+(labels[o.status]||o.status),"Data: "+formatDate(o.created_at),"ID: "+o.id));if(!items.length)results.append(node("p","Nenhum pedido encontrado."));};
         filter.addEventListener("change",render);search.addEventListener("input",render);
@@ -1190,15 +1197,15 @@ function navigate(page) {
           form.replaceChildren();
           if(!productSelect.value)return;
           const p=active.find(x=>x.id===productSelect.value);
-          const code=input("Ex.: PROMO10"),discount=input("Desconto %","number");discount.min="1";discount.max="100";
-          form.append(node("h3","Criar cupom para "+p.name),field("Código do cupom",code),field("Desconto (%)",discount),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,product_id:p.id,code:code.value,discount:Number(discount.value)});await load();}));
+          const code=input("Ex.: PROMO10"),discount=input("Desconto %","number"),max=input("Sem limite","number"),days=input("Sem vencimento","number");discount.min="1";discount.max="100";
+          form.append(node("h3","Criar cupom para "+p.name),field("Código do cupom",code),field("Desconto (%)",discount),field("Limite de usos (opcional)",max),field("Validade em dias (opcional)",days),button("Criar cupom",async()=>{await api("/api/commerce/coupons",{store_id:id,product_id:p.id,code:code.value,discount:Number(discount.value),max_uses:max.value?Number(max.value):null,days:days.value?Number(days.value):null});await load();}));
         };
         productSelect.addEventListener("change",showForm);
         chooser.append(field("Produto",productSelect));
         list.append(node("h3","Cupons cadastrados"));
         for(const c of d.coupons){
           const p=active.find(x=>x.id===c.product_id);
-          list.append(card(c.code,"Produto: "+(p?.name||"Cupom antigo sem produto definido"),"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses));
+          const tile=card(c.code,"Produto: "+(p?.name||"Cupom antigo sem produto definido"),"Desconto: "+c.discount+"%","Status: "+(c.active?"Ativo":"Inativo"),"Usos: "+c.uses+" / "+(c.max_uses??"∞"),"Validade: "+(c.expires_at?formatDate(c.expires_at):"Sem vencimento"));tile.append(button(c.active?"Desativar":"Ativar",async()=>{await api("/api/commerce/coupons/toggle",{store_id:id,coupon_id:c.id,active:!c.active});await load();}));list.append(tile);
         }
         if(!d.coupons.length)list.append(node("p","Nenhum cupom cadastrado."));
         list.append(node("p","A aplicação do desconto no carrinho ainda não está habilitada."));

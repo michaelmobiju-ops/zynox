@@ -206,6 +206,24 @@ export async function commerce(request,env,storeChannels){
   await env.DB.prepare("UPDATE products SET message_id=?,status='active' WHERE id=? AND store_id=?").bind(message.id,p.id,store.id).run();
   return json({success:true,message_id:message.id});
  }
+ if(path==="/api/commerce/analytics"&&request.method==="GET"){
+  const days=Number(url.searchParams.get("days")||30);
+  if(![7,30,90].includes(days))return fail("Período inválido.");
+  const from="-"+(days-1)+" days";
+  const scope="o.store_id=? AND o.status IN ('paid','delivering','delivered') AND date(o.paid_at)>=date('now',?)";
+  const [daily,products,buyers,low]=await Promise.all([
+   list("SELECT date(o.paid_at) AS day,COUNT(*) AS orders,SUM(o.total_cents) AS cents FROM orders o WHERE "+scope+" GROUP BY date(o.paid_at) ORDER BY day",store.id,from),
+   list("SELECT p.id,p.name,SUM(o.quantity) AS quantity,SUM(o.total_cents) AS cents FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE "+scope+" GROUP BY p.id ORDER BY quantity DESC,p.id LIMIT 10",store.id,from),
+   list("SELECT c.username,c.discord_id,COUNT(*) AS orders,SUM(o.total_cents) AS cents FROM orders o JOIN customers c ON c.id=o.customer_id AND c.store_id=o.store_id WHERE "+scope+" GROUP BY c.id ORDER BY cents DESC,c.id LIMIT 10",store.id,from),
+   list("SELECT p.name AS product,v.name AS variant,COUNT(s.id) AS quantity FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN stock s ON s.variant_id=v.id AND s.status='available' WHERE p.store_id=? AND p.status!='archived' AND v.infinite_stock=0 GROUP BY v.id HAVING COUNT(s.id)<=5 ORDER BY quantity,p.name LIMIT 100",store.id)
+  ]);
+  return json({days,daily,products,buyers,low});
+ }
+ if(path==="/api/commerce/coupons/toggle"&&request.method==="POST"){
+  if(typeof body.active!=="boolean")return fail("Estado inválido.");
+  const r=await env.DB.prepare("UPDATE coupons SET active=? WHERE id=? AND store_id=?").bind(Number(body.active),String(body.coupon_id||""),store.id).run();
+  return r.meta.changes?json({success:true}):fail("Cupom não encontrado.",404);
+ }
  if(path==="/api/commerce/overview"&&request.method==="GET"){
   const orders=await list("SELECT o.id,o.status,o.total_cents,o.created_at,o.paid_at,o.delivered_at,c.username,p.name AS product_name,v.name AS variant_name FROM orders o JOIN customers c ON c.id=o.customer_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   const stats=await env.DB.prepare("SELECT count(*) AS orders,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN total_cents ELSE 0 END),0) AS sales_cents,COALESCE(SUM(CASE WHEN status IN ('paid','delivering','delivered') THEN 1 ELSE 0 END),0) AS paid,COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END),0) AS pending,COALESCE(SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END),0) AS delivered FROM orders WHERE store_id=?").bind(store.id).first();
@@ -324,10 +342,12 @@ export async function commerce(request,env,storeChannels){
  if(path==="/api/commerce/wallet"||path.startsWith("/api/commerce/wallet/"))return fail("EM BREVE !",503);
  if(path==="/api/commerce/coupons"&&request.method==="POST"){
   const code=String(body.code||"").trim().toUpperCase(),discount=Number(body.discount),productId=String(body.product_id||"");
+  const max=body.max_uses==null?null:Number(body.max_uses),days=body.days==null?null:Number(body.days);if((max!==null&&(!Number.isSafeInteger(max)||max<1||max>100000))||(days!==null&&(!Number.isInteger(days)||days<1||days>365)))return fail("Limite ou validade inválida.");
+  const expires=days===null?null:new Date(Date.now()+days*86400000).toISOString();
   if(!/^[A-Z0-9_-]{2,32}$/.test(code)||!Number.isInteger(discount)||discount<1||discount>100||!productId)return fail("Selecione um produto e informe um cupom válido.");
   const product=await env.DB.prepare("SELECT id FROM products WHERE id=? AND store_id=? AND status!=\'archived\'").bind(productId,store.id).first();
   if(!product)return fail("Produto não encontrado nesta loja.",404);
-  let result;try{result=await env.DB.prepare("INSERT INTO coupons(id,store_id,product_id,code,discount) VALUES(?,?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,productId,code,discount).run();}catch(error){if(String(error).includes("product_id"))return fail("Aplique a migração 0008 no banco D1.",503);throw error;}
+  let result;try{result=await env.DB.prepare("INSERT INTO coupons(id,store_id,product_id,code,discount,max_uses,expires_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(store_id,code) DO NOTHING").bind(crypto.randomUUID(),store.id,productId,code,discount,max,expires).run();}catch(error){if(String(error).includes("product_id"))return fail("Aplique a migração 0008 no banco D1.",503);throw error;}
   return result.meta.changes?json({success:true}):fail("Cupom já existe.",409);
  }
  return fail("Funcionalidade indisponível.",404);
