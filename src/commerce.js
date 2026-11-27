@@ -191,7 +191,7 @@ export async function commerce(request,env,storeChannels){
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
   const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
-  const options=await list("SELECT id,name,price_cents FROM variants WHERE product_id=? ORDER BY created_at,id",p.id);
+  const options=await list("SELECT id,name,price_cents FROM variants WHERE product_id=? ORDER BY name,id",p.id);
   const price=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
   const components=p.has_variations&&options.length>1?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}];
   const payload={embeds:[embed],allowed_mentions:{parse:[]},components};
@@ -199,7 +199,7 @@ export async function commerce(request,env,storeChannels){
   if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
   let response;
   try{response=await call("/channels/"+p.channel_id+"/messages"+(p.message_id?"/"+p.message_id:""),{method:p.message_id?"PATCH":"POST",body:JSON.stringify({...payload,...(!p.message_id?{nonce:p.id.replaceAll("-","").slice(0,25),enforce_nonce:true}:{})})});}catch{return fail("Resultado incerto; confira o Discord antes de repetir.",502);}
-  if(!response.ok){await env.DB.prepare("UPDATE products SET status=? WHERE id=?").bind(p.status,p.id).run();return fail("Discord recusou a publicação.",502);}
+  if(!response.ok){await env.DB.prepare("UPDATE products SET status=? WHERE id=?").bind(p.status,p.id).run();const details=await response.json().catch(()=>({}));return fail("Discord recusou a publicação (HTTP "+response.status+(Number.isInteger(details.code)?" · código "+details.code:"")+").",502);}
   const message=await response.json();
   await env.DB.prepare("UPDATE products SET message_id=?,status='active' WHERE id=? AND store_id=?").bind(message.id,p.id,store.id).run();
   return json({success:true,message_id:message.id});

@@ -557,7 +557,7 @@ export default {
       }
       if (path.startsWith("/api/custom-bot/")) return customBots(request,env,ctx);
       if (path === "/api/store/channels") return storeChannels(request,env);
-      if (path.startsWith("/api/commerce/")) return commerce(request,env,storeChannels);
+      if (path.startsWith("/api/commerce/")) return await commerce(request,env,storeChannels);
 
       if (path === "/api/notifications" || path === "/api/notifications/read") {
         const user = await getSession(request, env);

@@ -115,7 +115,8 @@ async function api(path, body) {
     throw new Error("Sessão encerrada.");
   }
 
-  const data = await response.json();
+  let data;
+  try { data = await response.json(); } catch { throw new Error("Resposta inválida do servidor (HTTP "+response.status+"). Tente novamente."); }
 
   if (!response.ok) {
     throw new Error(
