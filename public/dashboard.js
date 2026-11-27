@@ -1384,6 +1384,24 @@ function navigate(page) {
       const identity=node("div",undefined,"bot-profile-identity"),avatar=node("img");avatar.src=result.avatar_url||"/zynox-logo.svg";avatar.alt="Foto atual do bot";avatar.className="bot-profile-avatar";
       const name=node("div",undefined,"bot-identity");name.append(node("strong",result.name),node("small",result.nickname===null?"Apelido não consultado":result.nickname||"Sem apelido no servidor"));
       const state=result.gateway?.state||"unavailable";identity.append(avatar,name,node("span",labels[state]||"Não verificado","bot-presence "+state));preview.append(cover,identity);host.append(preview);
+      const power=node("section",undefined,"bot-setting-card bot-power-card");
+      const powerStatus=node("p",result.gateway?.enabled===false?"Inicialização automática desativada.":"Inicialização automática habilitada.");
+      const powerActions=node("div",undefined,"bot-power-actions");
+      const changePower=async action=>{
+        if(action==="disable"&&!await confirmInApp("Desligar a conexão Gateway deste bot?"))return;
+        for(const b of powerActions.querySelectorAll("button"))b.disabled=true;
+        try{
+          const response=await api("/api/custom-bot/power",{store_id:id,action});
+          result.gateway=response.gateway;
+          powerStatus.textContent=response.gateway.enabled===false?"Inicialização automática desativada.":"Inicialização automática habilitada.";
+          const badge=identity.querySelector(".bot-presence");const state=response.gateway.state;
+          badge.textContent=labels[state]||"Não verificado";badge.className="bot-presence "+state;
+          toast(action==="disable"?"Gateway desligado.":"Solicitação de conexão enviada.",true);
+        }finally{for(const b of powerActions.querySelectorAll("button"))b.disabled=false;}
+      };
+      powerActions.append(button("Ligar",()=>changePower("enable")),button("Reiniciar",()=>changePower("restart")),button("Desligar",()=>changePower("disable"),true));
+      power.append(node("h3","Controle do bot"),powerStatus,powerActions);host.append(power);
+
       const grid=node("div",undefined,"bot-settings-grid"),pickers={};
       for(const kind of ["avatar","banner"]){
         const card=node("section",undefined,"bot-setting-card"),picker=node("input");picker.type="file";picker.accept="image/png,image/jpeg,image/gif,image/webp";picker.setAttribute("aria-label",kind==="avatar"?"Nova foto":"Novo banner");pickers[kind]=picker;

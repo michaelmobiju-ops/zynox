@@ -108,6 +108,13 @@ export async function customBots(request,env){
  const store=await env.DB.prepare("SELECT id,guild_id FROM stores WHERE id=? AND owner_id=?").bind(storeId,user.id).first();
  if(!store)return fail("Servidor não encontrado ou sem permissão.",404);
  const current=await env.DB.prepare("SELECT store_id,application_id,bot_user_id,bot_name,public_key,token_cipher FROM custom_bots WHERE store_id=?").bind(storeId).first();
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/power"){
+  if(!current)return fail("Bot não encontrado.",404);
+  if(!["enable","disable","restart"].includes(body.action))return fail("Ação inválida.");
+  const gateway=await startGateway(env,storeId,body.action);
+  if(gateway.state==="unavailable")return fail("Gateway indisponível.",503);
+  return respond({success:true,gateway});
+ }
  if(request.method==="GET"&&url.pathname==="/api/custom-bot/details"){
   if(!current)return fail("Bot não encontrado.",404);
   const token=await customBotToken(env,current);
