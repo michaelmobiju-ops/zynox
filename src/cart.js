@@ -79,7 +79,6 @@ export async function cart(interaction,env){
   let body={embeds:[embed],components,allowed_mentions:{parse:[]},...(opening?{content:"<@"+buyer+">, seu carrinho foi criado!",allowed_mentions:{parse:[],users:[buyer]}}:{})};
   if(payload){const form=new FormData();body.attachments=[{id:0,filename:"pix.gif"}];body.embeds[0].image={url:"attachment://pix.gif"};form.append("payload_json",JSON.stringify(body));form.append("files[0]",new Blob([qrGif(payload)],{type:"image/gif"}),"pix.gif");body=form;}
   const response=await call("/channels/"+privateChannel+"/messages","POST",body);
-  if(response.ok&&payload)await call("/channels/"+privateChannel+"/messages","POST",{content:payload,allowed_mentions:{parse:[]}});
   return response.ok?reply("Carrinho: <#"+privateChannel+">"):reply("Não foi possível enviar a mensagem ao carrinho.");
  };
  if(opening){
