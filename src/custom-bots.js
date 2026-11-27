@@ -60,7 +60,16 @@ export async function customBots(request,env){
   if(!identity.ok)return fail("Discord recusou a validação do token (HTTP "+identity.status+").",403);
   if(!identity.data.bot)return fail("A credencial informada não pertence a um bot.",403);
   if(!app.ok||!app.data.id)return fail("Não foi possível consultar a aplicação do bot (HTTP "+app.status+").",403);
-  if(!guild.ok)return fail("O bot não conseguiu acessar o servidor selecionado (HTTP "+guild.status+"). Instale seu bot nesse servidor e tente novamente.",403);
+  if(!guild.ok){
+   if(guild.status===404||guild.status===403){
+    const cached=await env.DB.prepare("SELECT guilds_json FROM discord_guild_cache WHERE user_id=? AND datetime(expires_at)>datetime('now')").bind(user.id).first();
+    if(cached&&JSON.parse(cached.guilds_json).some(g=>g.id===guildId)){
+     const params=new URLSearchParams({client_id:String(app.data.id),scope:"bot applications.commands",permissions:"85008",guild_id:guildId,disable_guild_select:"true"});
+     return respond({success:false,needs_install:true,invite_url:"https://discord.com/oauth2/authorize?"+params.toString()});
+    }
+   }
+   return fail("O bot não conseguiu acessar o servidor selecionado (HTTP "+guild.status+"). Instale seu bot nesse servidor e tente novamente.",403);
+  }
   if(!member.ok)return fail("Não foi possível verificar sua conta como membro do servidor (HTTP "+member.status+"). Confira a conta Discord vinculada.",403);
   const roles=new Set([guildId,...(member.data.roles||[])]);
   const perms=(guild.data.roles||[]).reduce((p,r)=>roles.has(r.id)?p|BigInt(r.permissions):p,0n);

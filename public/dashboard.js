@@ -181,7 +181,7 @@ function select(options) {
   const choices=node("div",undefined,"zynox-select-menu");choices.hidden=true;
   const values=[];let selected="",disabled=false;
   const close=()=>{choices.hidden=true;root.setAttribute("aria-expanded","false");};
-  const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",()=>{if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
+  const refresh=()=>{const found=values.find(x=>x.value===selected);display.textContent=(found?.label||"Selecione")+" ▾";choices.replaceChildren();for(const o of values){const item=node("button",o.label,"zynox-select-option");item.type="button";item.disabled=o.disabled;item.setAttribute("role","option");item.setAttribute("aria-selected",String(o.value===selected));item.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(disabled)return;selected=o.value;refresh();close();root.dispatchEvent(new Event("change",{bubbles:true}));});choices.append(item);}};
   Object.defineProperty(root,"value",{get:()=>selected,set:v=>{selected=String(v);refresh();}});
   Object.defineProperty(root,"disabled",{get:()=>disabled,set:v=>{disabled=Boolean(v);display.disabled=disabled;close();}});
   Object.defineProperty(root,"options",{get:()=>values});
@@ -1366,10 +1366,19 @@ function navigate(page) {
     const discovered=select([["","Carregando servidores..."]]);
     const directToken=input("Token do bot");directToken.type="password";directToken.autocomplete="off";
     const discoveryStatus=node("p","");
+    const installLink=node("a","Adicionar meu bot ao servidor","control-button");installLink.hidden=true;installLink.target="_blank";installLink.rel="noopener noreferrer";
     const authorize=button("Autorizar lista de servidores",()=>location.href="/auth/discord/link");authorize.hidden=true;
-    discovered.addEventListener("change",()=>{guildInput.value=discovered.value;});
-    direct.append(button("Voltar aos servidores",()=>navigate("servers")),field("Servidor do Discord",discovered),discoveryStatus,authorize,field("ID manual (alternativa)",guildInput),guide,field("Token do bot próprio",directToken),button("Conectar meu bot",async()=>{
-      try{await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});toast("Servidor vinculado.",true);navigate("bot");}finally{directToken.value="";}
+    discovered.addEventListener("change",()=>{guildInput.value=discovered.value;installLink.hidden=true;});
+    direct.append(button("Voltar aos servidores",()=>navigate("servers")),field("Servidor do Discord",discovered),discoveryStatus,installLink,authorize,field("ID manual (alternativa)",guildInput),guide,field("Token do bot próprio",directToken),button("Conectar meu bot",async()=>{
+      try{
+        const result=await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});
+        if(result.needs_install){
+          installLink.href=result.invite_url;installLink.hidden=false;
+          discoveryStatus.textContent="Token válido. Adicione seu bot ao servidor pelo botão abaixo e depois tente conectar novamente.";
+          return;
+        }
+        installLink.hidden=true;toast("Servidor vinculado.",true);navigate("bot");
+      }finally{directToken.value="";}
     }));
     main.append(direct,box);
     api("/api/discord/my-guilds").then(result=>{
