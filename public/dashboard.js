@@ -1364,7 +1364,19 @@ function navigate(page) {
     const direct=panel("Conectar um novo servidor","Use seu próprio bot, sem instalar o bot oficial da ZYNOX.");
     const guildInput=input("ID do servidor Discord");
     const directToken=input("Token do bot");directToken.type="password";directToken.autocomplete="off";
-    direct.append(button("Voltar aos servidores",()=>navigate("servers")),node("p","Ative o modo desenvolvedor no Discord, copie o ID do servidor e instale seu bot nele antes de continuar."),field("ID do servidor",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
+    const discovered=select([["","Escolha um servidor do Discord"]]);
+    const discoveryStatus=node("p","Informe o token para buscar os servidores onde seu bot está instalado.");
+    discovered.addEventListener("change",()=>{if(discovered.value)guildInput.value=discovered.value;});
+    direct.append(field("Selecionar servidor do Discord",discovered),discoveryStatus,button("Buscar servidores do meu bot",async()=>{
+      discovered.replaceChildren(new Option("Escolha um servidor do Discord",""));
+      discoveryStatus.textContent="Consultando Discord...";
+      try{
+        const result=await api("/api/custom-bot/discover",{token:directToken.value.trim()});
+        for(const g of result.servers)discovered.append(new Option(g.name,g.id));
+        discoveryStatus.textContent=result.servers.length?"Selecione um servidor para continuar."+(result.limited?" Consulta limitada aos primeiros 20 servidores do bot.":""):"Nenhum servidor autorizado encontrado. Instale o bot no servidor ou informe o ID manualmente.";
+      }catch(e){discoveryStatus.textContent=e.message;}
+    }));
+    direct.append(button("Voltar aos servidores",()=>navigate("servers")),node("p","Instale seu bot no servidor. Escolha na lista acima ou informe o ID manualmente."),field("ID do servidor (alternativa manual)",guildInput),field("Token do bot próprio",directToken),button("Vincular servidor com meu bot",async()=>{
       try{await api("/api/custom-bot/link",{guild_id:guildInput.value.trim(),token:directToken.value.trim()});toast("Servidor vinculado.",true);navigate("bot");}finally{directToken.value="";}
     }));
     if(!ZYNOX.user.discord_id)direct.append(button("Vincular minha conta Discord",()=>location.href="/auth/discord/link"));

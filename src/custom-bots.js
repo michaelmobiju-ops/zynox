@@ -31,6 +31,27 @@ export async function customBots(request,env){
  if(!["GET","POST"].includes(request.method))return fail("Método não permitido.",405);
  if(request.method==="POST"&&request.headers.get("Origin")!==url.origin)return fail("Origem não autorizada.",403);
  let body={};if(request.method==="POST"){try{body=await request.json()}catch{return fail("JSON inválido.");}}
+ if(request.method==="POST"&&url.pathname==="/api/custom-bot/discover"){
+  if(!user.discord_id)return fail("Vincule sua conta Discord uma única vez para verificar suas permissões.",403);
+  const token=String(body.token||"").trim();
+  if(token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("Informe um token de bot válido.");
+  const identity=await discord(token,"/users/@me");
+  if(!identity.ok||!identity.data.bot)return fail("Token do bot não autorizado.",403);
+  const result=await discord(token,"/users/@me/guilds?limit=200");
+  if(!result.ok||!Array.isArray(result.data))return fail("Não foi possível consultar servidores.",502);
+  const servers=[];
+  for(const g of result.data.slice(0,20)){
+   const [guild,member]=await Promise.all([discord(token,"/guilds/"+g.id),discord(token,"/guilds/"+g.id+"/members/"+user.discord_id)]);
+   if(!guild.ok||!member.ok)continue;
+   const roles=new Set([g.id,...(member.data.roles||[])]);
+   const perms=(guild.data.roles||[]).reduce((p,r)=>roles.has(r.id)?p|BigInt(r.permissions):p,0n);
+   if(guild.data.owner_id!==user.discord_id&&!(perms&40n))continue;
+   const existing=await env.DB.prepare("SELECT owner_id FROM stores WHERE guild_id=?").bind(g.id).first();
+   if(existing&&existing.owner_id!==user.id)continue;
+   servers.push({id:g.id,name:g.name});
+  }
+  return respond({servers,limited:result.data.length>20});
+ }
  if(request.method==="POST"&&url.pathname==="/api/custom-bot/link"){
   if(!user.discord_id)return fail("Vincule sua conta Discord antes de continuar.",403);
   const guildId=String(body.guild_id||""),token=String(body.token||"").trim();
