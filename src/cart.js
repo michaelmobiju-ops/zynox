@@ -60,13 +60,26 @@ export async function cart(interaction,env,ctx){
    if(!row||row.status!=="pending"||row.order_status!=="pending"||row.amount_cents!==row.total_cents)return reply("Pedido indisponível para confirmação.");
    let confirmed;try{confirmed=await confirmManual(env,{orderId,storeId:p.store_id,ownerId:p.owner_id,reference});}catch{return reply("Confirmação indisponível. Confira o pedido no painel.");}
    if(!confirmed)return reply("Estoque esgotado ou pedido já processado. Se houve pagamento, confira o extrato e providencie a devolução ao comprador.");
-   let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}
-   let updated=false;try{updated=await refreshAnnouncement(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
-   const notice=await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"✅ Pagamento confirmado! Produto enviado na DM do comprador.\nO carrinho será fechado em 10 segundos.":"Pagamento confirmado. Entrega pendente de revisão. O carrinho permanecerá aberto.",allowed_mentions:{parse:[]}});
-   if(delivery==="delivered"&&notice.ok&&ctx?.waitUntil){
-    ctx.waitUntil((async()=>{await new Promise(resolve=>setTimeout(resolve,10000));try{const channelRes=await call("/channels/"+privateChannel);if(!channelRes.ok)return;const latest=await channelRes.json();if(latest.topic!==channel.topic||!validChannel(latest,buyer))return;const deleted=await call("/channels/"+privateChannel,"DELETE");if(!deleted.ok&&deleted.status!==404)await call("/channels/"+privateChannel+"/messages","POST",{content:"Não foi possível fechar automaticamente. Use Fechar carrinho.",allowed_mentions:{parse:[]}});}catch{}})());
-   }
-   return reply((delivery==="delivered"?"Venda confirmada e entregue.":"Venda confirmada. Confira a entrega no painel.")+(updated?"":" Não foi possível atualizar o anúncio automaticamente. Atualize pelo painel."));
+   // Notify and start the close countdown as soon as the payment is committed.
+   // Delivery and announcement refresh run independently of the channel lifetime.
+   const closing=async()=>{
+    const notice=await call("/channels/"+privateChannel+"/messages","POST",{content:"✅ Pagamento confirmado!\nO carrinho será fechado em 10 segundos.",allowed_mentions:{parse:[]}});
+    if(!notice.ok)throw Error("Discord notice HTTP "+notice.status);
+    await new Promise(resolve=>setTimeout(resolve,10000));
+    const res=await call("/channels/"+privateChannel);
+    if(res.status===404)return;
+    if(!res.ok)throw Error("Discord channel HTTP "+res.status);
+    const latest=await res.json();
+    if(latest.topic!==channel.topic||!validChannel(latest,buyer))throw Error("Cart identity changed");
+    const deleted=await call("/channels/"+privateChannel,"DELETE");
+    if(!deleted.ok&&deleted.status!==404)throw Error("Discord delete HTTP "+deleted.status);
+   };
+   const completion=async()=>{try{await deliver(env,orderId);}catch(e){console.error("Cart delivery failed",orderId,String(e));}try{await refreshAnnouncement(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}};
+   const closeTask=closing().catch(async e=>{console.error("Cart auto-close failed",orderId,String(e));try{await call("/channels/"+privateChannel+"/messages","POST",{content:"Não foi possível fechar automaticamente. Use Fechar carrinho.",allowed_mentions:{parse:[]}});}catch{}});
+   const work=Promise.allSettled([closeTask,completion()]);
+   if(ctx?.waitUntil)ctx.waitUntil(work);else await work;
+   return reply("Venda confirmada. A entrega será processada e o carrinho será fechado após o aviso.");
+
   }
  }
  await env.DB.batch([
@@ -126,7 +139,7 @@ export async function cart(interaction,env,ctx){
   if(pix){
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   const paymentEmbed={author:{name:brand.name+" • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v6":"Pix por chave • QR indisponível sem cidade cadastrada • v6"}};
+   const paymentEmbed={author:{name:brand.name+" • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento → 03 • Entrega • v7":"Pix por chave • QR indisponível sem cidade cadastrada • v7"}};
    return publish(paymentEmbed,[{type:1,components:[{type:2,style:1,label:"Copiar Pix",emoji:{name:"📋"},custom_id:"copy-pix:"+p.id},{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");

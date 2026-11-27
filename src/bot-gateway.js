@@ -21,7 +21,7 @@ export class BotGateway {
   if(!this.socket&&!this.busy)await this.start(storeId);
   return Response.json(await this.snapshot());
  }
- async snapshot(){return {checkout_version:"checkout-v6",state:this.state,enabled:(await this.ctx.storage.get("enabled"))!==false,presence:await this.ctx.storage.get("presence")||{status:"online",activities:[],afk:false,since:null},lastReady:this.lastReady,lastAck:this.lastAck,lastError:this.lastError};}
+ async snapshot(){return {checkout_version:"checkout-v7",state:this.state,enabled:(await this.ctx.storage.get("enabled"))!==false,presence:await this.ctx.storage.get("presence")||{status:"online",activities:[],afk:false,since:null},lastReady:this.lastReady,lastAck:this.lastAck,lastError:this.lastError};}
  stop(){clearInterval(this.heartbeat);const socket=this.socket;this.socket=null;this.state="offline";try{socket?.close(1000,"Reconnect");}catch{}}
  async alarm(){
   const id=await this.ctx.storage.get("storeId");

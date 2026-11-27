@@ -144,7 +144,7 @@ export default {
 
     try {
 
-      if (path === "/api/checkout-version") return json({version:"checkout-v6"});
+      if (path === "/api/checkout-version") return json({version:"checkout-v7"});
       if (path === "/api/monitor/health") return monitor(request,env);
       if (path === "/api/owner/metrics") return ownerMetrics(request,env);
       if (path.startsWith("/api/shield/")) return shield(request,env);
