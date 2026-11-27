@@ -57,7 +57,11 @@ export async function customBots(request,env){
   const guildId=String(body.guild_id||""),token=String(body.token||"").trim();
   if(!/^\d{17,20}$/.test(guildId)||token.length<40||token.length>300||!/^[A-Za-z0-9._-]+$/.test(token))return fail("ID do servidor ou token inválido.");
   const [identity,app,guild,member]=await Promise.all([discord(token,"/users/@me"),discord(token,"/oauth2/applications/@me"),discord(token,"/guilds/"+guildId),discord(token,"/guilds/"+guildId+"/members/"+user.discord_id)]);
-  if(!identity.ok||!identity.data.bot||!app.ok||!app.data.id||!guild.ok||!member.ok)return fail("Verifique o token, a instalação do bot e sua participação no servidor.",403);
+  if(!identity.ok)return fail("Discord recusou a validação do token (HTTP "+identity.status+").",403);
+  if(!identity.data.bot)return fail("A credencial informada não pertence a um bot.",403);
+  if(!app.ok||!app.data.id)return fail("Não foi possível consultar a aplicação do bot (HTTP "+app.status+").",403);
+  if(!guild.ok)return fail("O bot não conseguiu acessar o servidor selecionado (HTTP "+guild.status+"). Instale seu bot nesse servidor e tente novamente.",403);
+  if(!member.ok)return fail("Não foi possível verificar sua conta como membro do servidor (HTTP "+member.status+"). Confira a conta Discord vinculada.",403);
   const roles=new Set([guildId,...(member.data.roles||[])]);
   const perms=(guild.data.roles||[]).reduce((p,r)=>roles.has(r.id)?p|BigInt(r.permissions):p,0n);
   if(guild.data.owner_id!==user.discord_id&&!(perms&40n))return fail("Você não tem permissão para gerenciar este servidor.",403);
