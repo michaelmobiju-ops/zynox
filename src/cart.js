@@ -63,7 +63,8 @@ export async function cart(interaction,env,ctx){
    // Notify and start the close countdown as soon as the payment is committed.
    // Delivery and announcement refresh run independently of the channel lifetime.
    const closing=async()=>{
-    const notice=await call("/channels/"+privateChannel+"/messages","POST",{content:"✅ Pagamento confirmado!\nO carrinho será fechado em 10 segundos.",allowed_mentions:{parse:[]}});
+    const brand=await checkoutBrand(env,p.store_id);
+    const notice=await call("/channels/"+privateChannel+"/messages","POST",{embeds:[{author:{name:brand.name+" • COMPRA FINALIZADA"},title:"✅ Pagamento confirmado!",description:"Obrigado pela sua compra! Sua entrega digital será processada por mensagem privada.",color:0x22c55e,fields:[{name:"Produto",value:String(p.name).slice(0,256),inline:true},{name:"Total pago",value:new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(row.total_cents/100),inline:true},{name:"Status do pagamento",value:"🟢 Confirmado"},{name:"⏳ Fechamento automático",value:"O carrinho será fechado em 10 segundos."}],...(p.image_url?{thumbnail:{url:p.image_url}}:{}),footer:{text:"ZYNOX • Obrigado pela preferência!"}}],allowed_mentions:{parse:[]}});
     if(!notice.ok)throw Error("Discord notice HTTP "+notice.status);
     await new Promise(resolve=>setTimeout(resolve,10000));
     const res=await call("/channels/"+privateChannel);
