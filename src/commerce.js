@@ -1,4 +1,4 @@
-import {inventorySQL,announcement,refreshAnnouncement} from "./product-announcement.js";
+import {inventorySQL,announcement,refreshAnnouncement,refreshProduct} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {expansionApi} from "./expansion-api.js";
 import {ticketPanelApi} from "./ticket-panels.js";
@@ -159,11 +159,12 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/stock/mode"&&request.method==="POST"){
   if(typeof body.infinite!=="boolean")return fail("Modo inválido.");
-  const v=await env.DB.prepare("SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
+  const v=await env.DB.prepare("SELECT v.id,v.product_id FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();
   if(!v)return fail("Variação não encontrada.",404);
-  const result=await env.DB.prepare("UPDATE variants SET infinite_stock=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE variant_id=? AND status IN ('pending','paid')) AND (?=0 OR ((SELECT count(*) FROM stock WHERE variant_id=? AND status='available')=1 AND NOT EXISTS(SELECT 1 FROM stock WHERE variant_id=? AND status='reserved')))").bind(body.infinite?1:0,v.id,v.id,body.infinite?1:0,v.id,v.id).run();
+  const result=await env.DB.prepare("UPDATE variants SET infinite_stock=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE variant_id=? AND status IN ('pending','paid','delivering')) AND (?=0 OR ((SELECT count(*) FROM stock WHERE variant_id=? AND status='available')=1 AND NOT EXISTS(SELECT 1 FROM stock WHERE variant_id=? AND status='reserved')))").bind(body.infinite?1:0,v.id,v.id,body.infinite?1:0,v.id,v.id).run();
   if(!result.meta.changes)return fail("Estoque infinito exige exatamente uma key disponível e nenhum pedido pendente.",409);
-  return json({success:true});
+  let announcement_updated=false;try{announcement_updated=await refreshProduct(env,v.product_id);}catch{}
+  return json({success:true,announcement_updated});
  }
  if(path==="/api/commerce/stock"&&request.method==="POST"){
   const v=await env.DB.prepare("SELECT v.id,v.infinite_stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=?").bind(String(body.variant_id||""),store.id).first();

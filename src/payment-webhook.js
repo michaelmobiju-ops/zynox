@@ -34,6 +34,7 @@ export async function deliver(env,orderId){
   if(!order.infinite_stock)batch.push(env.DB.prepare("UPDATE stock SET status='sold',reserved_until=NULL WHERE id=? AND status='reserved'").bind(item.id));
   batch.push(env.DB.prepare("UPDATE orders SET delivered_at=datetime('now'),status='delivered' WHERE id=? AND status='delivering'").bind(orderId));
   await env.DB.batch(batch);
+  try{await refreshAnnouncement(env,orderId);}catch{}
   return "delivered";
  }catch{
   // Unknown send outcome: leave the order locked for reconciliation.

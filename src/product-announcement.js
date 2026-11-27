@@ -10,8 +10,15 @@ export function announcement(p,options){
  const components=multiple?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)+" • Estoque: "+inventoryLabel(v)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:!options.some(v=>v.on_hand>0)}]}];
  return {embeds:[embed],components,allowed_mentions:{parse:[]}};
 }
+export async function refreshProduct(env,productId){
+ const p=await env.DB.prepare("SELECT * FROM products WHERE id=? AND status='active'").bind(productId).first();
+ return updateAnnouncement(env,p);
+}
 export async function refreshAnnouncement(env,orderId){
  const p=await env.DB.prepare("SELECT p.* FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id AND p.store_id=o.store_id WHERE o.id=? AND p.status='active'").bind(orderId).first();
+ return updateAnnouncement(env,p);
+}
+async function updateAnnouncement(env,p){
  if(!p?.message_id)return false;
  const token=await botTokenForStore(env,p.store_id);if(!token)return false;
  const options=(await env.DB.prepare(inventorySQL).bind(p.id).all()).results;

@@ -47,10 +47,10 @@ export async function cart(interaction,env){
    if(!row||row.status!=="pending"||row.order_status!=="pending"||row.amount_cents!==row.total_cents)return reply("Pedido indisponível para confirmação.");
    let result;try{result=await env.DB.batch([env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(p.owner_id,reference,orderId,p.store_id,orderId),env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND confirmed_by=?)").bind(orderId,p.store_id,orderId,p.owner_id)]);}catch{return reply("Referência já utilizada ou confirmação indisponível.");}
    if(!result[0].meta.changes)return reply("Pedido já processado.");
-   try{await refreshAnnouncement(env,orderId);}catch{}
-   let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
+   let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}
+   let updated=false;try{updated=await refreshAnnouncement(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
    await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"Pagamento confirmado. Produto enviado na DM do comprador.":"Pagamento confirmado. Entrega pendente de revisão.",allowed_mentions:{parse:[]}});
-   return reply(delivery==="delivered"?"Venda confirmada e entregue.":"Venda confirmada. Confira a entrega no painel.");
+   return reply((delivery==="delivered"?"Venda confirmada e entregue.":"Venda confirmada. Confira a entrega no painel.")+(updated?"":" Não foi possível atualizar o anúncio automaticamente. Atualize pelo painel."));
   }
  }
  await env.DB.batch([
