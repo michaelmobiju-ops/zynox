@@ -226,10 +226,9 @@ export async function commerce(request,env,storeChannels){
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="POST"){
   if(body.enabled===false){await env.DB.prepare("UPDATE manual_pix_settings SET enabled=0 WHERE store_id=?").bind(store.id).run();return json({success:true});}
-  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim(),city=String(body.merchant_city||"").trim();
+  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim(),city=(await env.DB.prepare("SELECT merchant_city FROM manual_pix_settings WHERE store_id=?").bind(store.id).first())?.merchant_city||null;
   const patterns={CPF:/^\d{11}$/,CNPJ:/^\d{14}$/,EMAIL:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,PHONE:/^\+55\d{10,11}$/,EVP:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i};
   if(!["nubank","mercadopago","picpay","itau","inter","bradesco","caixa","bb","santander","other"].includes(bank)||!Object.hasOwn(patterns,type)||!patterns[type].test(key)||key.length>150||!recipient||recipient.length>100||/[\r\n]/.test(recipient))return fail("Informe banco, titular e chave Pix válidos. Use apenas dígitos no CPF/CNPJ e +55 no telefone.");
-  if(!city||city.length>60||/[\r\n]/.test(city))return fail("Informe a cidade do titular da conta.");
   if(body.accept_disclosure!==true)return fail("Confirme que a chave será exibida privadamente ao comprador.");
   await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,merchant_city,enabled) VALUES(?,?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,merchant_city=excluded.merchant_city,enabled=1").bind(store.id,bank,type,key,recipient,city).run();
   return json({success:true});

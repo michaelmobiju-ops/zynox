@@ -133,7 +133,7 @@ async function storeChannels(request,env) {
           return p;
         }
         const required=19456n;
-        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,bot.id,c)&required)===required}))});
+        return json({channels:channels.filter(c=>[0,5].includes(c.type)&&!String(c.topic||"").startsWith("ZYNOX_CART:")&&!String(c.name||"").startsWith("carrinho-")&&(effective(m,user.discord_id,c)&1024n)!==0n).map(c=>({id:c.id,name:c.name,available:(effective(b,bot.id,c)&required)===required}))});
       
 }
 

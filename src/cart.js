@@ -35,8 +35,9 @@ export async function cart(interaction,env){
   const orderId="cart:"+privateChannel;
   if(action==="close:"){
    const order=await env.DB.prepare("SELECT status FROM orders WHERE id=? AND store_id=?").bind(orderId,p.store_id).first();
-   if(order&&["pending","paid","delivering"].includes(order.status))return reply("Este carrinho tem um pagamento ou entrega em andamento. O dono deve conferir o pedido antes de fechar.");
-   const deleted=await call("/channels/"+privateChannel,"DELETE");return reply(deleted.ok?"Carrinho fechado.":"Não foi possível fechar o carrinho.");
+   // Closing the Discord channel never cancels a bank payment or releases its stock.
+   // Pending and paid orders remain available in the authenticated sales panel.
+   const deleted=await call("/channels/"+privateChannel,"DELETE");return reply(deleted.ok?(order&&["pending","paid","delivering"].includes(order.status)?"Carrinho fechado. O pedido permanece no histórico para conferência e entrega.":"Carrinho fechado."):"Não foi possível fechar o carrinho.");
   }
   if(action==="confirm-sale:"){
    const row=await env.DB.prepare("SELECT m.status,o.status AS order_status FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.order_id=? AND m.store_id=?").bind(orderId,p.store_id).first();
@@ -63,10 +64,11 @@ export async function cart(interaction,env){
  const available=variants.filter(v=>v.available>0);
  if(!available.length)return reply("Produto sem estoque.");
  const money=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
- const controls=variant=>[{type:1,components:[{type:2,style:3,label:"Comprar",custom_id:"checkout:"+variant.id},{type:2,style:4,label:"Fechar carrinho",custom_id:"close:"+p.id}]}];
- const publish=async(content,components=[],payload=null)=>{
-  let body={content,components,allowed_mentions:{parse:[]}};
-  if(payload){const form=new FormData();body.attachments=[{id:0,filename:"pix.gif"}];body.embeds=[{image:{url:"attachment://pix.gif"}}];form.append("payload_json",JSON.stringify(body));form.append("files[0]",new Blob([qrGif(payload)],{type:"image/gif"}),"pix.gif");body=form;}
+ const cartEmbed=variant=>({author:{name:"CHECKOUT • COMPRA PRIVADA"},title:"🛒 "+p.name,description:String(p.description||"Produto digital").slice(0,4000),color:parseInt(String(p.color||"#7C3AED").slice(1),16)||0x7c3aed,fields:[{name:"Produto",value:variant?.name||"Escolha uma opção",inline:true},{name:"Total",value:variant?money(variant.price_cents):"A definir",inline:true},{name:"Entrega digital",value:"Após confirmação do pagamento."}],...(p.image_url?{thumbnail:{url:p.image_url}}:{}),footer:{text:"01 • Carrinho  →  02 • Pagamento  →  03 • Entrega"}});
+ const controls=variant=>[{type:1,components:[{type:2,style:3,label:"Comprar",emoji:{name:"🛒"},custom_id:"checkout:"+variant.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}];
+ const publish=async(embed,components=[],payload=null)=>{
+  let body={embeds:[embed],components,allowed_mentions:{parse:[]}};
+  if(payload){const form=new FormData();body.attachments=[{id:0,filename:"pix.gif"}];body.embeds[0].image={url:"attachment://pix.gif"};form.append("payload_json",JSON.stringify(body));form.append("files[0]",new Blob([qrGif(payload)],{type:"image/gif"}),"pix.gif");body=form;}
   const response=await call("/channels/"+privateChannel+"/messages","POST",body);
   return response.ok?reply("Carrinho: <#"+privateChannel+">"):reply("Não foi possível enviar a mensagem ao carrinho.");
  };
@@ -82,11 +84,12 @@ export async function cart(interaction,env){
   const created=await call("/guilds/"+p.guild_id+"/channels","POST",{name:"carrinho-"+buyer.slice(-8),type:0,topic,permission_overwrites:overwrites});
   if(!created.ok)return reply("Não foi possível criar o carrinho privado. Confira Gerenciar Canais (HTTP "+created.status+").");
   privateChannel=(await created.json()).id;
-  const desc="**"+p.name+"**\n"+String(p.description||"").slice(0,1300);
-  if(selected)return publish(desc+"\n**"+selected.name+" — "+money(selected.price_cents)+"**",controls(selected));
-  return publish(desc,[{type:1,components:[{type:3,custom_id:"choose:"+p.id,placeholder:"Selecione a variação",options:available.slice(0,25).map(v=>({label:v.name,value:v.id,description:money(v.price_cents)}))}]},{type:1,components:[{type:2,style:4,label:"Fechar carrinho",custom_id:"close:"+p.id}]}]);
+  const embed=cartEmbed(selected);
+  if(selected)return publish(embed,controls(selected));
+  return publish(embed,[{type:1,components:[{type:3,custom_id:"choose:"+p.id,placeholder:"Selecione a variação",options:available.slice(0,25).map(v=>({label:v.name,value:v.id,description:money(v.price_cents)}))}]},{type:1,components:[{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}]);
  }
- if(action==="choose:"){const selected=available.find(v=>v.id===interaction.data?.values?.[0]);if(!selected)return reply("Variação indisponível.");return publish("**"+p.name+" — "+selected.name+"**\n"+money(selected.price_cents),controls(selected));}
+ if(action==="choose:"){const selected=available.find(v=>v.id===interaction.data?.values?.[0]);if(!selected)return reply("Variação indisponível.");return publish(cartEmbed(selected),controls(selected));}
+
  if(action==="checkout:"){
   const v=available.find(v=>v.id===ref);
   if(!v)return reply("Variação indisponível.");
@@ -97,8 +100,8 @@ export async function cart(interaction,env){
   const orderId="cart:"+privateChannel;
   const db=env.DB;
   const pix=await db.prepare("SELECT bank,key_type,pix_key,recipient,merchant_city FROM manual_pix_settings WHERE store_id=? AND enabled=1").bind(p.store_id).first();
-  if(!pix||!pix.merchant_city)return reply("Pix ainda não configurado. O dono precisa cadastrar a chave, titular e cidade.");
-  let payload;try{payload=pixPayload({key:pix.pix_key,recipient:pix.recipient,city:pix.merchant_city,cents:v.price_cents});}catch{return reply("Configuração Pix inválida. Avise o dono da loja.");}
+  if(!pix)return reply("Pix ainda não configurado. O dono precisa cadastrar a chave e o titular.");
+  let payload=null;if(pix.merchant_city){try{payload=pixPayload({key:pix.pix_key,recipient:pix.recipient,city:pix.merchant_city,cents:v.price_cents});}catch{}}
   const prior=await db.prepare("SELECT status FROM orders WHERE id=? AND store_id=?").bind(orderId,p.store_id).first();if(prior)return reply("Este carrinho já possui um pedido. Confira as mensagens.");
   await db.batch([
    db.prepare("INSERT OR IGNORE INTO orders(id,store_id,customer_id,variant_id,quantity,total_cents,status) SELECT ?,?,?,v.id,1,v.price_cents,'pending' FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND p.status='active' AND EXISTS(SELECT 1 FROM stock WHERE variant_id=v.id AND status='available')").bind(orderId,p.store_id,customer.id,v.id,p.store_id),
@@ -115,9 +118,10 @@ export async function cart(interaction,env){
    ]);
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   return publish("**Pagamento Pix** — "+p.name+" / "+v.name+"\nValor: "+money(order.total_cents)+"\nTitular: "+pix.recipient+"\nPix copia e cola:\n`"+payload+"`\nConfira o crédito no aplicativo bancário. O dono confirma pelo extrato.",[{type:1,components:[{type:2,style:3,label:"Confirmar venda",custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",custom_id:"close:"+p.id}]}],payload);
+   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Abra o aplicativo do seu banco e confira o nome do destinatário e o valor antes de pagar.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Titular",value:pix.recipient,inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:"`"+(payload||pix.pix_key)+"`"},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
+   return publish(paymentEmbed,[{type:1,components:[{type:2,style:3,label:"Confirmar venda",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
-  return publish("**Pedido criado**\n"+p.name+" — "+v.name+"\nTotal: "+money(v.price_cents)+"\nPedido: "+orderId+"\nPix ainda não configurado. Nenhum pagamento foi solicitado.");
+  return reply("Pagamento indisponível.");
  }
  return reply("Interação indisponível.");
 }
