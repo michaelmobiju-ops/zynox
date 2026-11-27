@@ -1345,25 +1345,25 @@ function navigate(page) {
   if (page === "bot" || page === "bot-settings") {
     const configuring=page==="bot-settings";
     const box=panel("Configurar bot","Gerencie a identidade e a conexão do seu bot personalizado.");
-    box.classList.add("zynox-bot-panel");
+    box.classList.add("zynox-bot-panel","bot-settings-compact");
     const hero=node("div",undefined,"zynox-bot-hero");
     const symbol=node("img");symbol.src="/zynox-logo.svg";symbol.alt="ZYNOX";symbol.width=84;symbol.height=84;
     hero.append(symbol,node("div","SEU BOT + ZYNOX","zynox-bot-name"),node("p","Seu bot, sua identidade. A ZYNOX fornece o painel de gerenciamento."));
-    box.append(hero);
+    // Keep the identity header compact; real bot information is populated below.
     const info=node("p","Crie sua aplicação em discord.com/developers/applications, adicione o bot ao servidor e conecte o token abaixo. Nunca compartilhe o token em mensagens ou prints.");
     const guide=node("a","Abrir Discord Developer Portal","control-button");
     guide.href="https://discord.com/developers/applications";guide.target="_blank";guide.rel="noopener noreferrer";
     const storeSelect=select([["","Selecione o servidor"]]);
     const token=input("Cole o token do seu bot");token.type="password";token.autocomplete="off";
-    const connection=node("p","Selecione um servidor para verificar a conexão.");
-    const profile=node("div");
+    const connection=node("div","Selecione um servidor para verificar a conexão.","bot-connection-card");connection.setAttribute("role","status");
+    const profile=node("div",undefined,"bot-settings-grid");
     const connectExisting=button("Conectar meu bot",async()=>{
       if(!storeSelect.value)throw Error("Selecione o servidor.");
       if(!token.value.trim())throw Error("Informe o token do bot.");
       await api("/api/custom-bot/connect",{store_id:storeSelect.value,token:token.value.trim()});
       token.value="";await refresh();toast("Token validado e protegido.",true);
     });
-    box.append(field("Servidor",storeSelect),connection,button("Atualizar status",()=>refresh()),profile);
+    const toolbar=node("div",undefined,"bot-settings-toolbar");toolbar.append(field("Servidor",storeSelect),button("Atualizar",()=>refresh()));box.append(toolbar,connection,profile);
     const direct=panel("Conectar meu próprio bot","Selecione seu servidor Discord e informe o token do bot.");
     const guildInput=input("ID do servidor (opcional)");
     const discovered=select([["","Carregando servidores..."]]);
@@ -1390,27 +1390,38 @@ function navigate(page) {
       authorize.hidden=!result.needsAuthorization;
       discoveryStatus.textContent=result.needsAuthorization?"Autorize o acesso à lista de servidores uma vez.":result.servers.length?"Escolha um servidor que você administra.":"Nenhum servidor com permissão de gerenciamento encontrado.";
     }).catch(e=>{discoveryStatus.textContent=e.message;});
+    let settingsGeneration=0;
     async function refresh(){
+      const version=++settingsGeneration,storeId=storeSelect.value;
       profile.replaceChildren();
       if(!storeSelect.value){connection.textContent="Selecione um servidor.";return;}
       const result=await api("/api/custom-bot/status?store="+encodeURIComponent(storeSelect.value));
-      connection.textContent=result.connected?"Bot conectado: "+result.bot.name+" · Gateway: "+({online:"Online",connecting:"Conectando",offline:"Offline",unavailable:"Indisponível"}[result.gateway?.state]||"Não verificado")+" · Aplicação "+result.bot.application_id:"Nenhum bot próprio conectado a este servidor.";
-      if(!result.connected){profile.append(info,field("Token do bot",token),connectExisting);return;}
+      if(version!==settingsGeneration)return;
+      connection.replaceChildren();
+      if(!result.connected){connection.textContent="Nenhum bot próprio conectado a este servidor.";profile.append(info,field("Token do bot",token),connectExisting);return;}
+      const state=result.gateway?.state||"unavailable";
+      const logo=node("img");logo.src="/zynox-logo.svg";logo.alt="";logo.className="bot-brand-mark";
+      const identity=node("div",undefined,"bot-identity");identity.append(node("strong",result.bot.name),node("small","Aplicação "+result.bot.application_id));
+      const status=node("span",({online:"Online",connecting:"Conectando",offline:"Offline",unavailable:"Indisponível"}[state]||"Não verificado"),"bot-presence "+(["online","connecting","offline"].includes(state)?state:"unavailable"));
+      connection.append(logo,identity,status);
+      const card=(title,description)=>{const el=node("section",undefined,"bot-setting-card");el.append(node("h3",title),node("p",description));return el;};
       const note=node("p","O token fica criptografado no servidor. Para receber interações do Discord, configure o endereço abaixo no Discord Developer. A integração completa de vendas com bots próprios ainda está em desenvolvimento.");
       const endpoint=input("URL de interações");endpoint.value=result.bot.interactions_url;endpoint.readOnly=true;
-      profile.append(node("h3","Personalização do perfil"),note,field("Interactions Endpoint URL",endpoint),button("Copiar URL",()=>navigator.clipboard.writeText(endpoint.value)));
+      const advanced=node("details",undefined,"bot-advanced");advanced.append(node("summary","Integração avançada"),note,field("Interactions Endpoint URL",endpoint),button("Copiar URL",()=>navigator.clipboard.writeText(endpoint.value)));
       for(const kind of ["avatar","banner"]){
         const picker=node("input");picker.type="file";picker.accept="image/png,image/jpeg,image/gif,image/webp";
-        profile.append(field(kind==="avatar"?"Foto de perfil (até 1 MB)":"Banner (até 1 MB)",picker),button(kind==="avatar"?"Atualizar foto do bot":"Atualizar banner do bot",async()=>{
+        const media=card(kind==="avatar"?"Foto de perfil":"Banner","PNG, JPG, GIF ou WEBP · até 1 MB");
+        picker.setAttribute("aria-label",kind==="avatar"?"Escolher foto de perfil":"Escolher banner");
+        media.append(picker,button(kind==="avatar"?"Salvar foto":"Salvar banner",async()=>{
           const file=picker.files?.[0];if(!file)throw Error("Escolha uma imagem.");if(file.size>1024*1024)throw Error("A imagem deve ter no máximo 1 MB.");
           const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error("Falha ao ler imagem."));reader.readAsDataURL(file);});
-          await api("/api/custom-bot/profile",{store_id:storeSelect.value,kind,image});toast("Imagem atualizada no Discord.",true);
-        }));
+          await api("/api/custom-bot/profile",{store_id:storeId,kind,image});toast("Imagem atualizada no Discord.",true);
+        }));profile.append(media);
       }
       const bio=node("textarea");bio.placeholder="Descrição da aplicação no Discord";bio.maxLength=400;bio.rows=3;
-      profile.append(field("Biografia / descrição",bio),button("Salvar biografia",async()=>{await api("/api/custom-bot/profile",{store_id:storeSelect.value,kind:"bio",description:bio.value});toast("Descrição atualizada.",true);}));
+      const bioCard=card("Biografia","Descrição pública da aplicação.");bioCard.append(field("Descrição",bio),button("Salvar biografia",async()=>{await api("/api/custom-bot/profile",{store_id:storeId,kind:"bio",description:bio.value});toast("Descrição atualizada.",true);}));profile.append(bioCard);
       const nickname=input("Apelido neste servidor");nickname.maxLength=32;
-      profile.append(field("Apelido do bot",nickname),button("Salvar apelido",async()=>{await api("/api/commerce/bot-nickname",{store_id:storeSelect.value,nickname:nickname.value});toast("Apelido atualizado.",true);}));
+      const nickCard=card("Apelido","Nome exibido neste servidor.");nickCard.append(field("Apelido",nickname),button("Salvar apelido",async()=>{await api("/api/commerce/bot-nickname",{store_id:storeId,nickname:nickname.value});toast("Apelido atualizado.",true);}));profile.append(nickCard,advanced);
     }
     storeSelect.addEventListener("change",()=>refresh().catch(e=>connection.textContent=e.message));
     if(configuring)api("/api/dashboard/summary?store=").then(data=>{
