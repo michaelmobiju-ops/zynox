@@ -188,7 +188,7 @@ export default {
           const paused=await env.DB.prepare("SELECT c.enabled FROM server_controls c JOIN stores s ON s.id=c.store_id WHERE s.guild_id=?").bind(interaction.guild_id).first();
           if(paused&&paused.enabled===0)return json({type:4,data:{content:"ZYNOX está pausado neste servidor.",flags:64}});
         }
-        if (interaction.type === 3) { const ticket=await ticketInteraction(interaction,env,ctx);if(ticket)return json(ticket);if(/^(buy:|choose:|checkout:)/.test(interaction.data?.custom_id||"")){
+        if ([3,5].includes(interaction.type)) { const ticket=interaction.type===3?await ticketInteraction(interaction,env,ctx):null;if(ticket)return json(ticket);if(String(interaction.data?.custom_id||"").startsWith("confirm-sale:"))return json(await cart(interaction,env));if(/^(buy:|pick:|choose:|checkout:|close:|confirm-pix:)/.test(interaction.data?.custom_id||"")){
           ctx.waitUntil((async()=>{let result;try{result=await cart(interaction,env);}catch{}try{await fetch("https://discord.com/api/v10/webhooks/"+encodeURIComponent(interaction.application_id)+"/"+encodeURIComponent(interaction.token)+"/messages/@original",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:result?.data?.content||"Não foi possível abrir o carrinho.",components:result?.data?.components||[],allowed_mentions:{parse:[]}})});}catch{}})());
           return json({type:5,data:{flags:64}});
          } }

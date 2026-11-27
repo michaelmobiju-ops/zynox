@@ -191,7 +191,10 @@ export async function commerce(request,env,storeChannels){
   const check=await storeChannels(new Request(url.origin+"/api/store/channels?store="+encodeURIComponent(store.id),{headers:{Cookie:request.headers.get("Cookie")||""}}),env);
   if(!check.ok||!(await check.json()).channels?.some(c=>c.id===p.channel_id&&c.available))return fail("Canal não autorizado.",403);
   const embed={title:p.name,description:p.description||undefined,color:parseInt(p.color.slice(1),16),...(p.image_url?{image:{url:p.image_url}}:{})};
-  const payload={embeds:[embed],allowed_mentions:{parse:[]},components:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}]};
+  const options=await list("SELECT id,name,price_cents FROM variants WHERE product_id=? ORDER BY created_at,id",p.id);
+  const price=cents=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
+  const components=p.has_variations&&options.length>1?[{type:1,components:[{type:3,custom_id:"pick:"+p.id,placeholder:"Escolha o produto",options:options.slice(0,25).map(v=>({label:v.name,value:v.id,description:price(v.price_cents)}))}]}]:[{type:1,components:[{type:2,style:1,label:p.button_text,custom_id:"buy:"+p.id,disabled:false}]}];
+  const payload={embeds:[embed],allowed_mentions:{parse:[]},components};
   const locked=await env.DB.prepare("UPDATE products SET status='publishing' WHERE id=? AND store_id=? AND status IN ('draft','active')").bind(p.id,store.id).run();
   if(!locked.meta.changes)return fail("Publicação em andamento ou requer revisão.",409);
   let response;
@@ -217,17 +220,18 @@ export async function commerce(request,env,storeChannels){
   return json({success:true,environment:"sandbox",connected:false,message:"Autenticação validada. Cobranças ainda desativadas."});
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="GET"){
-  const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
+  const settings=await env.DB.prepare("SELECT bank,key_type,pix_key,recipient,merchant_city,enabled FROM manual_pix_settings WHERE store_id=?").bind(store.id).first();
   const orders=await list("SELECT m.order_id,m.amount_cents,m.status,m.confirmed_at,o.status AS order_status FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.store_id=? ORDER BY o.created_at DESC LIMIT 100",store.id);
   return json({settings,orders});
  }
  if(path==="/api/commerce/manual-pix"&&request.method==="POST"){
   if(body.enabled===false){await env.DB.prepare("UPDATE manual_pix_settings SET enabled=0 WHERE store_id=?").bind(store.id).run();return json({success:true});}
-  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim();
+  const bank=String(body.bank||""),type=String(body.key_type||""),key=String(body.pix_key||"").trim(),recipient=String(body.recipient||"").trim(),city=String(body.merchant_city||"").trim();
   const patterns={CPF:/^\d{11}$/,CNPJ:/^\d{14}$/,EMAIL:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,PHONE:/^\+55\d{10,11}$/,EVP:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i};
   if(!["nubank","mercadopago","picpay","itau","inter","bradesco","caixa","bb","santander","other"].includes(bank)||!Object.hasOwn(patterns,type)||!patterns[type].test(key)||key.length>150||!recipient||recipient.length>100||/[\r\n]/.test(recipient))return fail("Informe banco, titular e chave Pix válidos. Use apenas dígitos no CPF/CNPJ e +55 no telefone.");
+  if(!city||city.length>60||/[\r\n]/.test(city))return fail("Informe a cidade do titular da conta.");
   if(body.accept_disclosure!==true)return fail("Confirme que a chave será exibida privadamente ao comprador.");
-  await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,enabled) VALUES(?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,enabled=1").bind(store.id,bank,type,key,recipient).run();
+  await env.DB.prepare("INSERT INTO manual_pix_settings(store_id,bank,key_type,pix_key,recipient,merchant_city,enabled) VALUES(?,?,?,?,?,?,1) ON CONFLICT(store_id) DO UPDATE SET bank=excluded.bank,key_type=excluded.key_type,pix_key=excluded.pix_key,recipient=excluded.recipient,merchant_city=excluded.merchant_city,enabled=1").bind(store.id,bank,type,key,recipient,city).run();
   return json({success:true});
  }
  if(path==="/api/commerce/manual-pix/confirm"&&request.method==="POST"){
