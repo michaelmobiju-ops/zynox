@@ -1,3 +1,4 @@
+import {confirmManual,releaseLegacyManual} from "./manual-stock.js";
 import {inventorySQL,announcement,refreshAnnouncement,refreshProduct} from "./product-announcement.js";
 import {botTokenForStore} from "./custom-bots.js";
 import {expansionApi} from "./expansion-api.js";
@@ -241,12 +242,8 @@ export async function commerce(request,env,storeChannels){
   if(!row)return fail("Pedido Pix manual não encontrado.",404);
   if(row.status!=="pending"||row.order_status!=="pending")return fail("Pedido já processado ou indisponível.",409);
   if(row.amount_cents!==row.total_cents)return fail("Valor divergente.",409);
-  let result;
-  try{result=await env.DB.batch([
-   env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(user.id,reference,id,store.id,id),
-   env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND bank_reference=?)").bind(id,store.id,id,reference)
-  ]);}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
-  if(!result[0].meta.changes)return fail("Pedido já processado.",409);
+  let confirmed;try{await releaseLegacyManual(env,store.id);confirmed=await confirmManual(env,{orderId:id,storeId:store.id,ownerId:user.id,reference});}catch{return fail("Referência já utilizada ou confirmação indisponível.",409);}
+  if(!confirmed)return fail("Estoque esgotado ou pedido já processado. Se recebeu o Pix, providencie a devolução.",409);
   try{await refreshAnnouncement(env,id);}catch{}
    try{await announceSale(env,id);}catch{}
   let delivery="pending";try{delivery=await deliver(env,id);}catch{}

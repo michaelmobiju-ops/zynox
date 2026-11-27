@@ -1,0 +1,1 @@
+import test from "node:test";import assert from "node:assert/strict";import {pixPayload,crc16} from "../src/pix-qr.js";test("static Pix payload has valid checksum and no dynamic initiation marker",()=>{const p=pixPayload({key:"test@example.com",recipient:"Loja Teste",city:"Campinas",cents:50});assert.ok(p.startsWith("00020126"));assert.equal(p.slice(-4),crc16(p.slice(0,-4)));});

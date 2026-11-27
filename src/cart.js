@@ -1,3 +1,4 @@
+import {confirmManual,releaseLegacyManual} from "./manual-stock.js";
 import {refreshAnnouncement} from "./product-announcement.js";
 import {botIdentityForStore} from "./custom-bots.js";
 import {pixPayload,qrGif} from "./pix-qr.js";
@@ -20,6 +21,7 @@ export async function cart(interaction,env){
  const bot=await botIdentityForStore(env,p.store_id);
  if(!bot.token||String(bot.id)!==String(interaction.application_id))return reply("Bot da loja indisponível.");
  const call=(path,method="GET",body)=>fetch("https://discord.com/api/v10"+path,{method,headers:{Authorization:"Bot "+bot.token,...(body instanceof FormData?{}:{"Content-Type":"application/json"})},...(body?{body:body instanceof FormData?body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(8000)});
+ await releaseLegacyManual(env,p.store_id);
  let buyer=actor,privateChannel=null,chosen=variantRef?ref:null;
  const validChannel=(channel,customer)=>{const o=channel.permission_overwrites||[];return channel.guild_id===p.guild_id&&channel.type===0&&o.some(x=>x.id===p.guild_id&&x.type===0&&(BigInt(x.deny)&1024n)!==0n)&&!o.some(x=>![customer,bot.id,p.owner_discord].includes(x.id)&&(BigInt(x.allow)&1024n)!==0n);};
  if(!opening){
@@ -45,8 +47,8 @@ export async function cart(interaction,env){
    const reference=null;
    const row=await env.DB.prepare("SELECT m.status,o.status AS order_status,m.amount_cents,o.total_cents FROM manual_pix_orders m JOIN orders o ON o.id=m.order_id WHERE m.order_id=? AND m.store_id=?").bind(orderId,p.store_id).first();
    if(!row||row.status!=="pending"||row.order_status!=="pending"||row.amount_cents!==row.total_cents)return reply("Pedido indisponível para confirmação.");
-   let result;try{result=await env.DB.batch([env.DB.prepare("UPDATE manual_pix_orders SET status='confirmed',confirmed_by=?,bank_reference=?,confirmed_at=datetime('now') WHERE order_id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='pending')").bind(p.owner_id,reference,orderId,p.store_id,orderId),env.DB.prepare("UPDATE orders SET status='paid',paid_at=datetime('now') WHERE id=? AND store_id=? AND status='pending' AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='confirmed' AND confirmed_by=?)").bind(orderId,p.store_id,orderId,p.owner_id)]);}catch{return reply("Referência já utilizada ou confirmação indisponível.");}
-   if(!result[0].meta.changes)return reply("Pedido já processado.");
+   let confirmed;try{confirmed=await confirmManual(env,{orderId,storeId:p.store_id,ownerId:p.owner_id,reference});}catch{return reply("Confirmação indisponível. Confira o pedido no painel.");}
+   if(!confirmed)return reply("Estoque esgotado ou pedido já processado. Se houve pagamento, confira o extrato e providencie a devolução ao comprador.");
    let delivery="pending";try{delivery=await deliver(env,orderId);}catch{}
    let updated=false;try{updated=await refreshAnnouncement(env,orderId);}catch{}try{await announceSale(env,orderId);}catch{}
    await call("/channels/"+privateChannel+"/messages","POST",{content:delivery==="delivered"?"Pagamento confirmado. Produto enviado na DM do comprador.":"Pagamento confirmado. Entrega pendente de revisão.",allowed_mentions:{parse:[]}});
@@ -67,6 +69,7 @@ export async function cart(interaction,env){
   let body={embeds:[embed],components,allowed_mentions:{parse:[]},...(opening?{content:"<@"+buyer+">, seu carrinho foi criado!",allowed_mentions:{parse:[],users:[buyer]}}:{})};
   if(payload){const form=new FormData();body.attachments=[{id:0,filename:"pix.gif"}];body.embeds[0].image={url:"attachment://pix.gif"};form.append("payload_json",JSON.stringify(body));form.append("files[0]",new Blob([qrGif(payload)],{type:"image/gif"}),"pix.gif");body=form;}
   const response=await call("/channels/"+privateChannel+"/messages","POST",body);
+  if(response.ok&&payload)await call("/channels/"+privateChannel+"/messages","POST",{content:payload,allowed_mentions:{parse:[]}});
   return response.ok?reply("Carrinho: <#"+privateChannel+">"):reply("Não foi possível enviar a mensagem ao carrinho.");
  };
  if(opening){
@@ -102,20 +105,14 @@ export async function cart(interaction,env){
   const prior=await db.prepare("SELECT status FROM orders WHERE id=? AND store_id=?").bind(orderId,p.store_id).first();if(prior)return reply("Este carrinho já possui um pedido. Confira as mensagens.");
   await db.batch([
    db.prepare("INSERT OR IGNORE INTO orders(id,store_id,customer_id,variant_id,quantity,total_cents,status) SELECT ?,?,?,v.id,1,v.price_cents,'pending' FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.store_id=? AND p.status='active' AND EXISTS(SELECT 1 FROM stock WHERE variant_id=v.id AND status='available')").bind(orderId,p.store_id,customer.id,v.id,p.store_id),
-   db.prepare("INSERT OR IGNORE INTO order_stock(order_id,stock_id) SELECT o.id,s.id FROM orders o JOIN stock s ON s.variant_id=o.variant_id WHERE o.id=? AND o.status='pending' AND s.status='available' AND NOT EXISTS(SELECT 1 FROM order_stock WHERE order_id=o.id) ORDER BY s.created_at,s.id LIMIT 1").bind(orderId),
-   db.prepare("UPDATE stock SET status='reserved',reserved_until=datetime('now','+10 minutes') WHERE id IN (SELECT os.stock_id FROM order_stock os JOIN orders o ON o.id=os.order_id JOIN variants v ON v.id=o.variant_id WHERE o.id=? AND o.status='pending' AND v.infinite_stock=0) AND status='available'").bind(orderId)
+   db.prepare("INSERT OR IGNORE INTO manual_pix_orders(order_id,store_id,amount_cents) SELECT id,store_id,total_cents FROM orders WHERE id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id)").bind(orderId)
   ]);
-  const order=await db.prepare("SELECT o.id,o.total_cents FROM orders o JOIN order_stock os ON os.order_id=o.id JOIN variants v ON v.id=o.variant_id JOIN stock st ON st.id=os.stock_id AND ((v.infinite_stock=0 AND st.status='reserved' AND st.reserved_until>datetime('now')) OR (v.infinite_stock=1 AND st.status='available')) WHERE o.id=? AND o.customer_id=? AND o.status='pending'").bind(orderId,customer.id).first();
-  if(!order)return reply("Estoque indisponível ou pedido expirado.");
-
+  const order=await db.prepare("SELECT id,total_cents FROM orders WHERE id=? AND customer_id=? AND status='pending'").bind(orderId,customer.id).first();
+  if(!order)return reply("Estoque indisponível.");
   if(pix){
-   await db.batch([
-    db.prepare("INSERT OR IGNORE INTO manual_pix_orders(order_id,store_id,amount_cents) SELECT id,store_id,total_cents FROM orders WHERE id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM payments WHERE order_id=orders.id)").bind(orderId),
-    db.prepare("UPDATE stock SET reserved_until=datetime('now','+24 hours') WHERE status='reserved' AND id IN (SELECT stock_id FROM order_stock WHERE order_id=?) AND EXISTS(SELECT 1 FROM manual_pix_orders WHERE order_id=? AND status='pending')").bind(orderId,orderId)
-   ]);
    const manual=await db.prepare("SELECT status FROM manual_pix_orders WHERE order_id=?").bind(orderId).first();
    if(!manual||manual.status!=="pending")return reply("Pedido indisponível.");
-   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
+   const paymentEmbed={author:{name:"CHECKOUT • PAGAMENTO"},title:"💠 Pague com Pix",color:0x14b8a6,description:"Pagamento direto ao vendedor • ZYNOX. Confira o destinatário e o valor no banco. Estoque não reservado: confirme a disponibilidade antes de pagar. O dono só deve confirmar após verificar o crédito no extrato.",fields:[{name:"Total a pagar",value:"**"+money(order.total_cents)+"**",inline:true},{name:"Recebimento",value:"Direto na conta do vendedor",inline:true},{name:"Produto",value:p.name.slice(0,256)+" • "+v.name},{name:payload?"Pix copia e cola":"Chave Pix ("+pix.key_type+")",value:payload||pix.pix_key},{name:"Status",value:"⏳ Aguardando confirmação do pagamento"},{name:"Pedido",value:orderId}],footer:{text:payload?"02 • Pagamento  →  03 • Entrega":"Pix por chave • QR indisponível sem cidade cadastrada"}};
    return publish(paymentEmbed,[{type:1,components:[{type:2,style:3,label:"Confirmar compra (dono)",emoji:{name:"✅"},custom_id:"confirm-sale:"+p.id},{type:2,style:4,label:"Fechar carrinho",emoji:{name:"✖️"},custom_id:"close:"+p.id}]}],payload);
   }
   return reply("Pagamento indisponível.");

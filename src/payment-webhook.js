@@ -16,7 +16,7 @@ export async function deliver(env,orderId){
  if(order.status!=="paid"||!env.STOCK_ENCRYPTION_KEY)return "pending";
  const botToken=await botTokenForStore(env,order.store_id);
  if(!botToken)return "pending";
- const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND s.status=? LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock?"available":"reserved").first();
+ const item=await env.DB.prepare("SELECT s.id,s.key_encrypted FROM order_stock os JOIN stock s ON s.id=os.stock_id WHERE os.order_id=? AND s.variant_id=? AND ((?=1 AND s.status='available') OR (?=0 AND s.status IN ('reserved','sold'))) LIMIT 1").bind(orderId,order.variant_id,order.infinite_stock,order.infinite_stock).first();
  if(!item)return "pending";
  const value=await decryptStock(item.key_encrypted,order.variant_id,env.STOCK_ENCRYPTION_KEY);
  const nonce=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(orderId))),b=>b.toString(16).padStart(2,"0")).join("").slice(0,25);
